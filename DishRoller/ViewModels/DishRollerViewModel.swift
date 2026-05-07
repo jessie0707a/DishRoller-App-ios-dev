@@ -26,14 +26,14 @@ final class DishRollerViewModel: ObservableObject {
             return
         }
 
-        guard selectedResults.count < 5 else { return }
-
-        let available = ingredients.filter { ingredient in
-            !selectedResults.contains(where: { $0.name.lowercased() == ingredient.name.lowercased() })
-        }
-
+        let available = ingredients.filter(isAvailableForSelection)
         guard let random = available.randomElement() else { return }
-        selectedResults.append(random)
+        addSelection(random)
+    }
+
+    func addSelection(_ ingredient: Ingredient) {
+        guard isAvailableForSelection(ingredient) else { return }
+        selectedResults.append(ingredient)
     }
 
     func removeResult(_ ingredient: Ingredient) {
@@ -42,6 +42,14 @@ final class DishRollerViewModel: ObservableObject {
 
     func clearResults() {
         selectedResults.removeAll()
+    }
+
+    private func isAvailableForSelection(_ ingredient: Ingredient) -> Bool {
+        guard selectedResults.count < 5 else { return false }
+
+        return !selectedResults.contains {
+            $0.name.lowercased() == ingredient.name.lowercased()
+        }
     }
 
     func generateRecipe() async -> Recipe? {
