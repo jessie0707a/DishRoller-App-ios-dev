@@ -9,8 +9,16 @@ import SwiftUI
 import Combine
 
 struct DishRollerView: View {
+    private enum Mode: String, CaseIterable, Identifiable {
+        case raw = "Raw"
+        case dishes = "Dishes"
+
+        var id: String { rawValue }
+    }
+
     @EnvironmentObject var appVM: AppViewModel
     @StateObject private var vm = DishRollerViewModel()
+    @State private var selectedMode: Mode = .raw
 
     var body: some View {
         ScrollView {
@@ -249,16 +257,23 @@ struct DishRollerView: View {
 
             Spacer()
 
-            HStack {
-                Text("Raw")
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 8)
-                    .background(Color.yellow)
-                    .clipShape(Capsule())
-
-                Text("Dishes")
-                    .foregroundColor(.yellow)
-                    .padding(.horizontal, 18)
+            HStack(spacing: 4) {
+                ForEach(Mode.allCases) { mode in
+                    Button {
+                        selectedMode = mode
+                    } label: {
+                        Text(mode.rawValue)
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(selectedMode == mode ? .black : .yellow)
+                            .lineLimit(1)
+                            .frame(minWidth: 72)
+                            .frame(height: 36)
+                            .background(selectedMode == mode ? Color.yellow : Color.clear)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(4)
             .background(Color.black)
