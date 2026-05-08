@@ -388,12 +388,14 @@ struct DishRollerView: View {
                         turntableWheel
                             .rotationEffect(.degrees(wheelRotation))
                             .frame(width: wheelSize, height: wheelSize)
-                            .offset(x:-70, y:8)
+                            .offset(x:0, y:125)
+                            .frame(width:370,height:300)
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
 
                         VStack(spacing: 0) {
                             Triangle()
                                 .fill(Color.black)
-                                .frame(width: 16, height: 84)
+                                .frame(width: 12, height: 84)
                                 .shadow(color: .black.opacity(0.18), radius: 4, y: 1)
 
                             Button {
@@ -415,7 +417,7 @@ struct DishRollerView: View {
                             .buttonStyle(.plain)
                             .offset(y: -10)
                         }
-                        .offset(x:-70,y:-30)
+                        .offset(x:0,y:60)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .clipped()
@@ -447,7 +449,7 @@ struct DishRollerView: View {
                     WheelSegmentShape(
                         startAngle: .degrees(startAngle),
                         endAngle: .degrees(endAngle),
-                        innerRadiusRatio: 0.34
+                        innerRadiusRatio: 0.32
                     )
                     .fill(index.isMultiple(of: 2) ? Color(.systemGray6) : Color(.systemGray5))
                     .overlay(
@@ -456,7 +458,7 @@ struct DishRollerView: View {
                             endAngle: .degrees(endAngle),
                             innerRadiusRatio: 0.34
                         )
-                        .stroke(Color.black, lineWidth: 4)
+                        .stroke(Color.black, lineWidth: 8)
                     )
 
                     WheelSegmentLabel(ingredient: ingredient)
