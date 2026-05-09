@@ -15,8 +15,83 @@ final class AppViewModel: ObservableObject {
     @Published var storageVM = StorageViewModel()
     @Published var savedRecipesVM = SavedRecipesViewModel()
 
+    private var cancellables: Set<AnyCancellable> = []
+
+    init() {
+        bindChildViewModels()
+    }
+
     func openMenu(with recipe: Recipe) {
-        currentRecipe = recipe
+        currentRecipe = syncedRecipeState(for: recipe)
         selectedTab = 2
     }
+
+    func toggleSavedState(for recipe: Recipe) {
+        if savedRecipesVM.isSaved(recipe) {
+            savedRecipesVM.removeRecipe(recipe)
+        } else {
+            savedRecipesVM.saveRecipe(recipe)
+        }
+
+        guard currentRecipe?.id == recipe.id else { return }
+        currentRecipe?.isSaved.toggle()
+    }
+
+    private func bindChildViewModels() {
+        storageVM.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        savedRecipesVM.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func syncedRecipeState(for recipe: Recipe) -> Recipe {
+        var updatedRecipe = recipe
+        updatedRecipe.isSaved = savedRecipesVM.isSaved(recipe)
+        return updatedRecipe
+    }
 }
+
+#if DEBUG
+extension AppViewModel {
+    static var previewSample: AppViewModel {
+        let appVM = AppViewModel()
+
+        appVM.storageVM.ingredients = [
+            Ingredient(name: "Chicken Thigh", category: .meat, amount: 2, unit: .pcs),
+            Ingredient(name: "Garlic", category: .veg, amount: 3, unit: .pcs),
+            Ingredient(name: "Soy Sauce", category: .condiment, amount: 150, unit: .ml),
+            Ingredient(name: "Broccoli", category: .veg, amount: 1, unit: .pcs)
+        ]
+
+        let sampleRecipe = Recipe(
+            title: "Black Pepper Garlic Chicken",
+            estimatedTime: "30 min",
+            flavourTags: ["Chinese", "Savory", "Quick"],
+            ingredients: [
+                RecipeIngredient(name: "Chicken Thigh", amount: "2 pcs"),
+                RecipeIngredient(name: "Garlic", amount: "3 cloves"),
+                RecipeIngredient(name: "Soy Sauce", amount: "2 tbsp"),
+                RecipeIngredient(name: "Black Pepper", amount: "1 tsp")
+            ],
+            procedure: [
+                "Marinate the chicken with soy sauce and black pepper for 10 minutes.",
+                "Saute garlic until fragrant, then add chicken and sear both sides.",
+                "Cook until the chicken is done, then reduce the sauce slightly before serving."
+            ],
+            isSaved: true
+        )
+
+        appVM.savedRecipesVM.savedRecipes = [sampleRecipe]
+        appVM.currentRecipe = sampleRecipe
+
+        return appVM
+    }
+}
+#endif

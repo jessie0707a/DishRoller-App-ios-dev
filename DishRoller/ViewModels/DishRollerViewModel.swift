@@ -18,7 +18,7 @@ final class DishRollerViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    private let recipeService = OpenAIRecipeService()
+    private let recipeService = GeminiRecipeService()
 
     func roll(from ingredients: [Ingredient]) {
         guard !ingredients.isEmpty else {
@@ -72,7 +72,7 @@ final class DishRollerViewModel: ObservableObject {
             return recipe
         } catch {
             isLoading = false
-            errorMessage = "Failed to generate recipe. Please try again."
+            errorMessage = error.localizedDescription
             return nil
         }
     }

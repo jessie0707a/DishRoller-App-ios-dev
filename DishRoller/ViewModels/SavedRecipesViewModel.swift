@@ -25,12 +25,20 @@ final class SavedRecipesViewModel: ObservableObject {
     }
 
     func removeRecipe(_ recipe: Recipe) {
-        savedRecipes.removeAll { $0.title == recipe.title }
+        savedRecipes.removeAll { $0.id == recipe.id }
         persist()
     }
 
     func isSaved(_ recipe: Recipe) -> Bool {
-        savedRecipes.contains { $0.title == recipe.title }
+        savedRecipes.contains { $0.id == recipe.id }
+    }
+
+    func toggleSavedState(for recipe: Recipe) {
+        if isSaved(recipe) {
+            removeRecipe(recipe)
+        } else {
+            saveRecipe(recipe)
+        }
     }
 
     private func persist() {

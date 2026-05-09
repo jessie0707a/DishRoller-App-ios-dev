@@ -22,10 +22,6 @@ final class MenuViewModel: ObservableObject {
     }
 
     func toggleSave(recipe: Recipe, savedVM: SavedRecipesViewModel) {
-        if savedVM.isSaved(recipe) {
-            savedVM.removeRecipe(recipe)
-        } else {
-            savedVM.saveRecipe(recipe)
-        }
+        savedVM.toggleSavedState(for: recipe)
     }
 }

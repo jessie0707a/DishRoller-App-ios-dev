@@ -13,17 +13,25 @@ struct MenuView: View {
     @StateObject private var vm = MenuViewModel()
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    header
 
-                if let recipe = appVM.currentRecipe {
-                    recipeCard(recipe)
-                } else {
-                    emptyState
+                    if let recipe = appVM.currentRecipe {
+                        RecipeCardView(
+                            recipe: recipe,
+                            menuVM: vm,
+                            storageIngredients: appVM.storageVM.ingredients
+                        )
+                        .environmentObject(appVM)
+                    } else {
+                        emptyState
+                    }
                 }
+                .padding()
             }
-            .padding()
+            .navigationBarHidden(true)
         }
     }
 
@@ -49,7 +57,32 @@ struct MenuView: View {
         }
     }
 
-    private func recipeCard(_ recipe: Recipe) -> some View {
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "fork.knife.circle")
+                .font(.system(size: 64))
+                .foregroundColor(.gray)
+
+            Text("No recipe yet")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("Go to DishRoll and generate a recipe.")
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+    }
+}
+
+private struct RecipeCardView: View {
+    @EnvironmentObject private var appVM: AppViewModel
+
+    let recipe: Recipe
+    let menuVM: MenuViewModel
+    let storageIngredients: [Ingredient]
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text(recipe.title)
@@ -59,12 +92,14 @@ struct MenuView: View {
                 Spacer()
 
                 Button {
-                    vm.toggleSave(recipe: recipe, savedVM: appVM.savedRecipesVM)
+                    appVM.toggleSavedState(for: recipe)
                 } label: {
-                    Image(systemName: appVM.savedRecipesVM.isSaved(recipe) ? "star.fill" : "star")
+                    Image(systemName: recipe.isSaved ? "star.fill" : "star")
                         .font(.largeTitle)
                         .foregroundColor(.black)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(recipe.isSaved ? "Remove from favorites" : "Add to favorites")
             }
 
             HStack {
@@ -95,9 +130,9 @@ struct MenuView: View {
                 ForEach(recipe.ingredients) { ingredient in
                     RecipeIngredientRow(
                         ingredient: ingredient,
-                        exists: vm.ingredientExists(
+                        exists: menuVM.ingredientExists(
                             ingredient,
-                            storageIngredients: appVM.storageVM.ingredients
+                            storageIngredients: storageIngredients
                         )
                     )
                 }
@@ -124,27 +159,12 @@ struct MenuView: View {
         .background(Color.yellow)
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
-
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "fork.knife.circle")
-                .font(.system(size: 64))
-                .foregroundColor(.gray)
-
-            Text("No recipe yet")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Text("Go to DishRoll and generate a recipe.")
-                .foregroundColor(.gray)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 80)
-    }
 }
 
 
 #Preview {
+    let appVM = AppViewModel.previewSample
+
     MenuView()
-        .environmentObject(AppViewModel())
+        .environmentObject(appVM)
 }
