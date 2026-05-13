@@ -13,7 +13,7 @@ struct Recipe: Identifiable, Codable, Equatable {
     var estimatedTime: String
     var flavourTags: [String]
     var ingredients: [RecipeIngredient]
-    var procedure: [String]
+    var procedure: [RecipeProcedureStep]
     var isSaved: Bool
 
     init(
@@ -23,6 +23,26 @@ struct Recipe: Identifiable, Codable, Equatable {
         flavourTags: [String],
         ingredients: [RecipeIngredient],
         procedure: [String],
+        isSaved: Bool = false
+    ) {
+        self.init(
+            id: id,
+            title: title,
+            estimatedTime: estimatedTime,
+            flavourTags: flavourTags,
+            ingredients: ingredients,
+            procedure: procedure.map { RecipeProcedureStep(instruction: $0) },
+            isSaved: isSaved
+        )
+    }
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        estimatedTime: String,
+        flavourTags: [String],
+        ingredients: [RecipeIngredient],
+        procedure: [RecipeProcedureStep],
         isSaved: Bool = false
     ) {
         self.id = id
@@ -44,5 +64,28 @@ struct RecipeIngredient: Identifiable, Codable, Equatable {
         self.id = id
         self.name = name
         self.amount = amount
+    }
+}
+
+struct RecipeProcedureStep: Codable, Equatable {
+    var emoji: String
+    var instruction: String
+
+    init(emoji: String = "🍳", instruction: String) {
+        self.emoji = emoji
+        self.instruction = instruction
+    }
+
+    init(from decoder: Decoder) throws {
+        if let container = try? decoder.singleValueContainer(),
+           let instruction = try? container.decode(String.self) {
+            self.emoji = "🍳"
+            self.instruction = instruction
+            return
+        }
+
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.emoji = try container.decodeIfPresent(String.self, forKey: .emoji) ?? "🍳"
+        self.instruction = try container.decode(String.self, forKey: .instruction)
     }
 }
