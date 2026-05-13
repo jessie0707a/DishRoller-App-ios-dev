@@ -1,1 +1,4 @@
 DishRoller/Config.plist
+.DS_Store
+*.xcuserstate
+xcuserdata/

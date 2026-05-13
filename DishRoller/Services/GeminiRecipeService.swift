@@ -23,7 +23,9 @@ final class GeminiRecipeService {
         ingredients: [Ingredient],
         time: CookingTime,
         type: DishType,
-        style: FlavourStyle
+        style: FlavourStyle,
+        customPreferences: String,
+        avoidancePrompt: String
     ) async throws -> Recipe {
         guard !apiKey.isEmpty else {
             return DemoRecipeFactory.makeRecipe(
@@ -35,16 +37,41 @@ final class GeminiRecipeService {
         }
 
         let ingredientNames = ingredients.map { $0.name }.joined(separator: ", ")
+        let trimmedPreferences = customPreferences.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preferenceInstruction = trimmedPreferences.isEmpty
+            ? "No extra user preferences provided."
+            : trimmedPreferences
+        let trimmedAvoidancePrompt = avoidancePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let avoidanceInstruction = trimmedAvoidancePrompt.isEmpty
+            ? "No avoid-food preferences selected."
+            : "Strictly avoid these foods for the selected people: \(trimmedAvoidancePrompt). Do not include them, obvious variants, or close substitutes anywhere in the recipe."
         let prompt = """
-        You are a cooking assistant.
+        You are DishRoller's recipe generator. Create one practical home-cooking recipe that fits the user's selected ingredients and preferences.
 
-        Generate one practical recipe based on:
-        Ingredients: \(ingredientNames)
-        Time: \(time.rawValue)
-        Type: \(type.rawValue)
-        Style: \(style.rawValue)
+        User selections:
+        - Selected ingredients: \(ingredientNames)
+        - Target cooking time: \(time.rawValue)
+        - Dish type: \(type.rawValue)
+        - Flavour style: \(style.rawValue)
+        - Extra preferences: \(preferenceInstruction)
+        - Avoid-food rules: \(avoidanceInstruction)
 
-        Keep the ingredient list realistic, the steps concise, and the result easy to cook at home.
+        Recipe rules:
+        - Use the selected ingredients as the main direction of the dish. You may add common pantry staples only when needed, such as oil, salt, pepper, water, sugar, soy sauce, vinegar, flour, or stock.
+        - Keep the recipe realistic for a normal home kitchen and achievable within the target cooking time.
+        - Respect the dish type, flavour style, and extra preferences unless they conflict with avoid-food rules.
+        - Treat extra preferences as guidance for dietary needs, texture, cooking method, spice level, serving style, or cuisine details.
+        - Avoid all avoid-food items completely in the title, flavour tags, ingredient list, and procedure.
+        - If a selected ingredient conflicts with avoid-food rules, omit it and build the recipe around the remaining safe ingredients.
+
+        Output quality rules:
+        - title: concise, appetizing, and specific.
+        - estimatedTime: use a short value like "15 min", "30 min", or "1 hr".
+        - flavourTags: return 2 to 4 short tags. Use direct cuisine names like "Japanese", not "Japanese Inspired".
+        - ingredients: return practical cooking amounts. Keep name as the base ingredient only, such as "Garlic" instead of "Minced garlic".
+        - ingredient amount: use compact cooking units such as "1 tsp", "1 cup", "2 pcs", "200 g", or "to taste".
+        - ingredient form: put preparation or ingredient form here, such as "minced", "sliced", "diced", "whole", "fillet", "paste", "ground", or "fresh". Use "prepared" if no clearer form applies.
+        - procedure: return 3 to 6 concise steps in cooking order. Each step must include one matching cooking emoji and one clear instruction.
         """
 
         guard let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent") else {
@@ -88,20 +115,28 @@ final class GeminiRecipeService {
             return Recipe(
                 title: recipeDTO.title,
                 estimatedTime: recipeDTO.estimatedTime,
-                flavourTags: recipeDTO.flavourTags,
+                flavourTags: recipeDTO.flavourTags.map(Self.normalizedFlavourTag),
                 ingredients: recipeDTO.ingredients.map {
-                    RecipeIngredient(name: $0.name, amount: $0.amount)
+                    RecipeIngredient(name: $0.name, amount: $0.amount, form: $0.form)
                 },
-                procedure: recipeDTO.procedure
+                procedure: recipeDTO.procedure.map {
+                    RecipeProcedureStep(emoji: $0.emoji, instruction: $0.instruction)
+                }
             )
         } catch {
-            return DemoRecipeFactory.makeRecipe(
-                ingredients: ingredients,
-                time: time,
-                type: type,
-                style: style
-            )
+            throw error
         }
+    }
+
+    private static func normalizedFlavourTag(_ tag: String) -> String {
+        let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        let inspiredSuffix = " Inspired"
+
+        if trimmedTag.lowercased().hasSuffix(inspiredSuffix.lowercased()) {
+            return String(trimmedTag.dropLast(inspiredSuffix.count))
+        }
+
+        return trimmedTag
     }
 }
 
@@ -172,10 +207,21 @@ private enum RecipeSchema {
         "type": "object",
         "properties": [
             "name": ["type": "string"],
-            "amount": ["type": "string"]
+            "amount": ["type": "string"],
+            "form": ["type": "string"]
         ],
-        "required": ["name", "amount"],
-        "propertyOrdering": ["name", "amount"]
+        "required": ["name", "amount", "form"],
+        "propertyOrdering": ["name", "amount", "form"]
+    ]
+
+    private static let procedureStepSchema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "emoji": ["type": "string"],
+            "instruction": ["type": "string"]
+        ],
+        "required": ["emoji", "instruction"],
+        "propertyOrdering": ["emoji", "instruction"]
     ]
 
     private static let recipeSchema: [String: Any] = [
@@ -193,7 +239,7 @@ private enum RecipeSchema {
             ],
             "procedure": [
                 "type": "array",
-                "items": ["type": "string"]
+                "items": procedureStepSchema
             ]
         ],
         "required": ["title", "estimatedTime", "flavourTags", "ingredients", "procedure"],
@@ -226,12 +272,18 @@ private struct RecipeDTO: Codable {
     let estimatedTime: String
     let flavourTags: [String]
     let ingredients: [RecipeIngredientDTO]
-    let procedure: [String]
+    let procedure: [RecipeProcedureStepDTO]
 }
 
 private struct RecipeIngredientDTO: Codable {
     let name: String
     let amount: String
+    let form: String
+}
+
+private struct RecipeProcedureStepDTO: Codable {
+    let emoji: String
+    let instruction: String
 }
 
 private enum DemoRecipeFactory {
@@ -251,12 +303,13 @@ private enum DemoRecipeFactory {
         let recipeIngredients = ingredients.map {
             RecipeIngredient(
                 name: $0.name,
-                amount: demoAmount(for: $0)
+                amount: demoAmount(for: $0),
+                form: demoForm(for: $0)
             )
         }
 
         let fallbackIngredients = recipeIngredients.isEmpty
-            ? [RecipeIngredient(name: "Salt", amount: "to taste")]
+            ? [RecipeIngredient(name: "Salt", amount: "to taste", form: "fine")]
             : recipeIngredients
 
         return Recipe(
@@ -292,14 +345,23 @@ private enum DemoRecipeFactory {
         ingredients: [RecipeIngredient],
         time: CookingTime,
         style: FlavourStyle
-    ) -> [String] {
+    ) -> [RecipeProcedureStep] {
         let names = ingredients.map(\.name).joined(separator: ", ")
         let styleText = style == .any ? "your preferred seasonings" : "\(style.rawValue.lowercased()) seasonings"
 
         return [
-            "Prepare \(names) and portion everything so the recipe can be finished in about \(time.rawValue.lowercased()).",
-            "Cook the main ingredients in a pan or pot, then season with \(styleText) and adjust the taste as needed.",
-            "Finish when the ingredients are cooked through, then plate and serve warm as a demo-mode recipe."
+            RecipeProcedureStep(
+                emoji: "🔪",
+                instruction: "Prepare \(names) and portion everything so the recipe can be finished in about \(time.rawValue.lowercased())."
+            ),
+            RecipeProcedureStep(
+                emoji: "🔥",
+                instruction: "Cook the main ingredients in a pan or pot, then season with \(styleText) and adjust the taste as needed."
+            ),
+            RecipeProcedureStep(
+                emoji: "🍽️",
+                instruction: "Finish when the ingredients are cooked through, then plate and serve warm as a demo-mode recipe."
+            )
         ]
     }
 
@@ -312,6 +374,21 @@ private enum DemoRecipeFactory {
         }
 
         return "\(formattedAmount) \(ingredient.unit.rawValue)"
+    }
+
+    private static func demoForm(for ingredient: Ingredient) -> String {
+        switch ingredient.category {
+        case .meat:
+            return "sliced"
+        case .seafood:
+            return "fillet"
+        case .veg:
+            return "chopped"
+        case .drink:
+            return "liquid"
+        case .condiment:
+            return "paste"
+        }
     }
 }
 

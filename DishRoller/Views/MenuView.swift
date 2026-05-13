@@ -108,18 +108,12 @@ private struct RecipeCardView: View {
                 Text(recipe.estimatedTime)
             }
 
-            HStack {
-                Text("Flavour:")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Flavour")
+                    .font(.headline)
                     .fontWeight(.black)
 
-                ForEach(recipe.flavourTags, id: \.self) { tag in
-                    Text(tag)
-                        .font(.caption)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 4)
-                        .background(Color.white)
-                        .clipShape(Capsule())
-                }
+                FlavourTagFlowView(tags: recipe.flavourTags)
             }
 
             Text("Ingredient")
@@ -145,15 +139,7 @@ private struct RecipeCardView: View {
                 .font(.title3)
                 .fontWeight(.black)
 
-            VStack(alignment: .leading, spacing: 16) {
-                ForEach(Array(recipe.procedure.enumerated()), id: \.offset) { index, step in
-                    Text("\(index + 1). \(step)")
-                        .font(.body)
-                }
-            }
-            .padding()
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
+            ProcedureStepCardsView(steps: recipe.procedure)
         }
         .padding()
         .background(Color.yellow)

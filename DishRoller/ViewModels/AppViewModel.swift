@@ -82,10 +82,10 @@ extension AppViewModel {
             estimatedTime: "30 min",
             flavourTags: ["Chinese", "Savory", "Quick"],
             ingredients: [
-                RecipeIngredient(name: "Chicken Thigh", amount: "2 pcs"),
-                RecipeIngredient(name: "Garlic", amount: "3 cloves"),
-                RecipeIngredient(name: "Soy Sauce", amount: "2 tbsp"),
-                RecipeIngredient(name: "Black Pepper", amount: "1 tsp")
+                RecipeIngredient(name: "Chicken Thigh", amount: "2 pcs", form: "sliced"),
+                RecipeIngredient(name: "Garlic", amount: "3 cloves", form: "minced"),
+                RecipeIngredient(name: "Soy Sauce", amount: "2 tbsp", form: "sauce"),
+                RecipeIngredient(name: "Black Pepper", amount: "1 tsp", form: "ground")
             ],
             procedure: [
                 "Marinate the chicken with soy sauce and black pepper for 10 minutes.",

@@ -38,7 +38,7 @@ struct RecipeIngredientRow: View {
                     formBadge(title: form)
                 }
 
-                if showsStorageStatus {
+                if showsStorageStatus && exists {
                     statusBadge
                 }
 

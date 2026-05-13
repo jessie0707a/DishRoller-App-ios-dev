@@ -14,7 +14,7 @@ struct AvoidancePreferencesView: View {
                 Button {
                     appVM.avoidanceVM.addProfile()
                 } label: {
-                    Label("Add person", systemImage: "plus.circle.fill")
+                    Label("Add avoid card", systemImage: "plus.circle.fill")
                         .font(.headline)
                         .fontWeight(.black)
                         .foregroundColor(.black)
@@ -85,7 +85,7 @@ private struct AvoidanceProfileCard: View {
                     .textInputAutocapitalization(.words)
 
                     TextField(
-                        "Foods to avoid",
+                        "Foods to avoid, separated by commas",
                         text: Binding(
                             get: { profile.avoidFoods },
                             set: onFoodsChange

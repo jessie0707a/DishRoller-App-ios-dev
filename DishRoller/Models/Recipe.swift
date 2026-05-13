@@ -59,11 +59,13 @@ struct RecipeIngredient: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
     var amount: String
+    var form: String?
 
-    init(id: UUID = UUID(), name: String, amount: String) {
+    init(id: UUID = UUID(), name: String, amount: String, form: String? = nil) {
         self.id = id
         self.name = name
         self.amount = amount
+        self.form = form
     }
 }
 

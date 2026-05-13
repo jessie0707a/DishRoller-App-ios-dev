@@ -13,6 +13,7 @@ final class DishRollerViewModel: ObservableObject {
     @Published var selectedTime: CookingTime = .fifteen
     @Published var selectedType: DishType = .mainCourse
     @Published var selectedStyle: FlavourStyle = .chinese
+    @Published var customPreferences = ""
 
     @Published var selectedResults: [Ingredient] = []
     @Published var isLoading = false
@@ -52,7 +53,7 @@ final class DishRollerViewModel: ObservableObject {
         }
     }
 
-    func generateRecipe() async -> Recipe? {
+    func generateRecipe(avoidancePrompt: String) async -> Recipe? {
         guard !selectedResults.isEmpty else {
             errorMessage = "Please select at least one ingredient."
             return nil
@@ -66,7 +67,9 @@ final class DishRollerViewModel: ObservableObject {
                 ingredients: selectedResults,
                 time: selectedTime,
                 type: selectedType,
-                style: selectedStyle
+                style: selectedStyle,
+                customPreferences: customPreferences,
+                avoidancePrompt: avoidancePrompt
             )
             isLoading = false
             return recipe

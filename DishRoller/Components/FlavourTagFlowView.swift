@@ -11,7 +11,7 @@ struct FlavourTagFlowView: View {
     let tags: [String]
 
     var body: some View {
-        FlowLayout(spacing: 8, lineSpacing: 8) {
+        WrappingFlowLayout(spacing: 8, lineSpacing: 8) {
             ForEach(tags, id: \.self) { tag in
                 Text(tag)
                     .font(.caption)
@@ -33,7 +33,7 @@ struct FlavourTagFlowView: View {
     }
 }
 
-struct FlowLayout: Layout {
+struct WrappingFlowLayout: Layout {
     var spacing: CGFloat = 8
     var lineSpacing: CGFloat = 8
 

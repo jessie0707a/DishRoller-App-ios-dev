@@ -26,19 +26,33 @@ struct DishRollerView: View {
     @State private var spinTimer: Timer?
     @State private var remainingSpins = 3
     @State private var selectedComboCategories: Set<IngredientCategory> = [.meat, .seafood, .veg]
+    @State private var magicPulse = false
+    @State private var magicRotation = 0.0
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                controlPanel
-                modeBar
-                wheelView
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    header
+                    controlPanel
+                    modeBar
+                    wheelView
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 10)
-            .padding(.bottom, 14)
+            .navigationBarHidden(true)
         }
+        .overlay(alignment: .top) {
+            if vm.isLoading {
+                generatingMagicCard
+                    .padding(.top, 88)
+                    .padding(.horizontal, 24)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.78), value: vm.isLoading)
         .alert("Notice", isPresented: Binding(
             get: { vm.errorMessage != nil },
             set: { _ in vm.errorMessage = nil }
@@ -47,8 +61,12 @@ struct DishRollerView: View {
         } message: {
             Text(vm.errorMessage ?? "")
         }
+        .onChange(of: vm.isLoading) { _, isLoading in
+            updateMagicAnimation(isLoading: isLoading)
+        }
         .onDisappear {
             stopSpinTimer()
+            updateMagicAnimation(isLoading: false)
         }
     }
 
@@ -60,12 +78,20 @@ struct DishRollerView: View {
 
             Spacer()
 
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.title3.weight(.bold))
-                .padding(.horizontal, 24)
-                .padding(.vertical, 10)
-                .background(Color.yellow)
-                .clipShape(Capsule())
+            NavigationLink {
+                AvoidancePreferencesView()
+                    .environmentObject(appVM)
+            } label: {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(Color.yellow)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open Avoid Foods")
         }
     }
 
@@ -142,7 +168,9 @@ struct DishRollerView: View {
                 HStack(spacing: 16) {
                     Button {
                         Task {
-                            if let recipe = await vm.generateRecipe() {
+                            if let recipe = await vm.generateRecipe(
+                                avoidancePrompt: appVM.avoidanceVM.selectedAvoidancePrompt
+                            ) {
                                 appVM.openMenu(with: recipe)
                             }
                         }
@@ -182,20 +210,68 @@ struct DishRollerView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
-    private var preferenceCapsule: some View {
-        HStack {
-            Text("Preferences")
-                .font(.subheadline)
-                .foregroundColor(.gray)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+    private var generatingMagicCard: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Text("✨")
+                    .font(.system(size: 26))
+                    .offset(x: -18, y: -12)
+                    .scaleEffect(magicPulse ? 1.2 : 0.7)
+                    .opacity(magicPulse ? 1 : 0.45)
+
+                Text("🪄")
+                    .font(.system(size: 34))
+                    .rotationEffect(.degrees(magicRotation))
+                    .scaleEffect(magicPulse ? 1.05 : 0.95)
+
+                Text("✨")
+                    .font(.system(size: 20))
+                    .offset(x: 20, y: 14)
+                    .scaleEffect(magicPulse ? 0.75 : 1.25)
+                    .opacity(magicPulse ? 0.5 : 1)
+            }
+            .frame(width: 58, height: 58)
+            .background(Color.yellow.opacity(0.35))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Generating magic...")
+                    .font(.headline)
+                    .fontWeight(.black)
+                    .foregroundColor(.black)
+
+                Text("Cooking up a cute recipe")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.gray)
+            }
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, minHeight: 40)
+        .padding(14)
+        .frame(maxWidth: 320)
         .background(Color.white)
-        .clipShape(Capsule())
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
+    }
+
+    private var preferenceCapsule: some View {
+        TextField("Preferences", text: $vm.customPreferences)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundColor(.black)
+            .lineLimit(1)
+            .textInputAutocapitalization(.sentences)
+            .disableAutocorrection(false)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .background(Color.white)
+            .clipShape(Capsule())
+            .accessibilityLabel("Recipe preferences")
     }
 
     private var addIngredientButton: some View {
@@ -519,6 +595,21 @@ struct DishRollerView: View {
         vm.clearResults()
     }
 
+    private func updateMagicAnimation(isLoading: Bool) {
+        if isLoading {
+            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+                magicPulse = true
+            }
+
+            withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
+                magicRotation = 360
+            }
+        } else {
+            magicPulse = false
+            magicRotation = 0
+        }
+    }
+
     private func toggleComboCategory(_ category: IngredientCategory) {
         if selectedComboCategories.contains(category) {
             if selectedComboCategories.count > 1 {
@@ -549,29 +640,112 @@ struct FlowResultView: View {
     let onRemove: (Ingredient) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack {
-                ForEach(results) { ingredient in
-                    Button {
-                        onRemove(ingredient)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(ingredient.name)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            Image(systemName: "xmark")
-                                .font(.caption.weight(.bold))
-                        }
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.white)
-                        .foregroundColor(.black)
-                        .clipShape(Capsule())
+        ResultFlowLayout(spacing: 8, lineSpacing: 8) {
+            ForEach(results) { ingredient in
+                Button {
+                    onRemove(ingredient)
+                } label: {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text(ingredient.name)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.bold))
+                            .padding(.top, 3)
                     }
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.white)
+                    .foregroundColor(.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
+                .buttonStyle(.plain)
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+
+struct ResultFlowLayout: Layout {
+    var spacing: CGFloat = 8
+    var lineSpacing: CGFloat = 8
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout Void
+    ) -> CGSize {
+        let maxWidth = proposal.width ?? 0
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var measuredWidth: CGFloat = 0
+
+        for subview in subviews {
+            let availableWidth = max(maxWidth - currentX, 0)
+            let proposedWidth = maxWidth > 0 ? availableWidth : nil
+            var size = subview.sizeThatFits(ProposedViewSize(width: proposedWidth, height: nil))
+
+            if maxWidth > 0, size.width > maxWidth {
+                size = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+            }
+
+            if maxWidth > 0, currentX > 0, currentX + size.width > maxWidth {
+                currentX = 0
+                currentY += lineHeight + lineSpacing
+                lineHeight = 0
+                size = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+            }
+
+            measuredWidth = max(measuredWidth, currentX + size.width)
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+
+        return CGSize(
+            width: maxWidth > 0 ? maxWidth : measuredWidth,
+            height: currentY + lineHeight
+        )
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout Void
+    ) {
+        var currentX = bounds.minX
+        var currentY = bounds.minY
+        var lineHeight: CGFloat = 0
+        let maxWidth = bounds.width
+
+        for subview in subviews {
+            let availableWidth = max(bounds.maxX - currentX, 0)
+            var size = subview.sizeThatFits(ProposedViewSize(width: availableWidth, height: nil))
+
+            if size.width > maxWidth {
+                size = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+            }
+
+            if currentX > bounds.minX, currentX + size.width > bounds.maxX {
+                currentX = bounds.minX
+                currentY += lineHeight + lineSpacing
+                lineHeight = 0
+                size = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+            }
+
+            subview.place(
+                at: CGPoint(x: currentX, y: currentY),
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
         }
     }
 }
