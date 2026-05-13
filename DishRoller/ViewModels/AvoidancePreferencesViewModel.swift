@@ -3,6 +3,7 @@
 //  DishRoller
 //
 
+import Combine
 import Foundation
 
 final class AvoidancePreferencesViewModel: ObservableObject {

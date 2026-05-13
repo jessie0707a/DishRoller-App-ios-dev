@@ -14,6 +14,7 @@ final class AppViewModel: ObservableObject {
 
     @Published var storageVM = StorageViewModel()
     @Published var savedRecipesVM = SavedRecipesViewModel()
+    @Published var avoidanceVM = AvoidancePreferencesViewModel()
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -45,6 +46,12 @@ final class AppViewModel: ObservableObject {
             .store(in: &cancellables)
 
         savedRecipesVM.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        avoidanceVM.objectWillChange
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
             }

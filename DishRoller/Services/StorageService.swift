@@ -12,6 +12,7 @@ final class StorageService {
 
     private let ingredientsKey = "dishroller.ingredients"
     private let savedRecipesKey = "dishroller.savedRecipes"
+    private let avoidanceProfilesKey = "dishroller.avoidanceProfiles"
 
     private init() {}
 
@@ -43,5 +44,20 @@ final class StorageService {
             return []
         }
         return recipes
+    }
+
+    func saveAvoidanceProfiles(_ profiles: [AvoidanceProfile]) {
+        if let data = try? JSONEncoder().encode(profiles) {
+            UserDefaults.standard.set(data, forKey: avoidanceProfilesKey)
+        }
+    }
+
+    func loadAvoidanceProfiles() -> [AvoidanceProfile] {
+        guard let data = UserDefaults.standard.data(forKey: avoidanceProfilesKey),
+              let profiles = try? JSONDecoder().decode([AvoidanceProfile].self, from: data)
+        else {
+            return []
+        }
+        return profiles
     }
 }
