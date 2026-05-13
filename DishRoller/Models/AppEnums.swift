@@ -15,6 +15,16 @@ enum IngredientCategory: String, CaseIterable, Codable, Identifiable {
     case condiment = "CONDIMENT"
 
     var id: String { rawValue }
+
+    var categoryIcon: String {
+        switch self {
+        case .meat:      "fork.knife"
+        case .veg:       "leaf"
+        case .seafood:   "fish"
+        case .drink:     "cup.and.saucer"
+        case .condiment: "flame"
+        }
+    }
 }
 
 enum UnitType: String, CaseIterable, Codable, Identifiable {

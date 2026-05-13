@@ -13,31 +13,36 @@ struct IngredientCardView: View {
     let onDecrease: () -> Void
 
     var body: some View {
-        ZStack {
-            Color.gray.opacity(0.3)
+        VStack(spacing: 0) {
+            ZStack {
+                LinearGradient(
+                    colors: [Color(white: 0.18), Color.black],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
 
-            groceryLineArt
-                .foregroundColor(.black.opacity(0.1))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .padding(.top, 20)
-                .allowsHitTesting(false)
+                Image(systemName: ingredient.category.categoryIcon)
+                    .font(.system(size: 40, weight: .thin))
+                    .foregroundColor(.yellow)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 90)
 
-            VStack(spacing: 8) {
-                Text(ingredient.category.rawValue)
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 4)
-                    .background(Color.yellow)
-                    .clipShape(Capsule())
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Spacer()
-
+            VStack(spacing: 4) {
                 Text(ingredient.name)
                     .font(.headline)
                     .fontWeight(.black)
                     .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(ingredient.category.rawValue)
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 2)
+                    .background(Color.yellow)
+                    .clipShape(Capsule())
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack {
                     Button(action: onDecrease) {
@@ -48,6 +53,7 @@ struct IngredientCardView: View {
 
                     Text("\(formatAmount(ingredient.amount)) \(ingredient.unit.rawValue)")
                         .fontWeight(.bold)
+                        .font(.caption)
 
                     Spacer()
 
@@ -55,37 +61,18 @@ struct IngredientCardView: View {
                         Image(systemName: "plus.circle.fill")
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 4)
                 .background(Color.black.opacity(0.6))
                 .foregroundColor(.yellow)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
-            .padding(.top, 8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white)
         }
-        .frame(height: 150)
         .clipShape(RoundedRectangle(cornerRadius: 18))
-    }
-
-    @ViewBuilder
-    private var groceryLineArt: some View {
-        switch ingredient.category {
-        case .meat:
-            categoryIcon("fork.knife")
-        case .veg:
-            categoryIcon("carrot")
-        case .seafood:
-            categoryIcon("fish")
-        case .drink:
-            categoryIcon("cup.and.saucer")
-        case .condiment:
-            categoryIcon("takeoutbag.and.cup.and.straw")
-        }
-    }
-
-    private func categoryIcon(_ systemName: String) -> some View {
-        Image(systemName: systemName)
-            .font(.system(size: 64, weight: .light))
-            .symbolRenderingMode(.monochrome)
+        .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
     }
 
     private func formatAmount(_ value: Double) -> String {

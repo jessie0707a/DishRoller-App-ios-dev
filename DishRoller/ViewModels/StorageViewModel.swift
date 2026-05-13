@@ -11,6 +11,7 @@ import Combine
 final class StorageViewModel: ObservableObject {
     @Published var ingredients: [Ingredient] = []
     @Published var selectedFilter: IngredientCategory? = nil
+    @Published var searchText: String = ""
 
     let commonIngredients: [String: [String]] = [
         "MEAT": ["Chicken", "Beef", "Pork", "Lamb", "Bacon"],
@@ -29,8 +30,11 @@ final class StorageViewModel: ObservableObject {
     }
 
     var filteredIngredients: [Ingredient] {
-        guard let selectedFilter else { return ingredients }
-        return ingredients.filter { $0.category == selectedFilter }
+        ingredients.filter { ingredient in
+            let matchesCategory = selectedFilter == nil || ingredient.category == selectedFilter
+            let matchesSearch = searchText.isEmpty || ingredient.name.localizedCaseInsensitiveContains(searchText)
+            return matchesCategory && matchesSearch
+        }
     }
 
     func addIngredient(name: String, category: IngredientCategory, amount: Double, unit: UnitType) {

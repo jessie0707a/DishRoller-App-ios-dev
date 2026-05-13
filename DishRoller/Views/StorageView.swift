@@ -10,7 +10,6 @@ import SwiftUI
 struct StorageView: View {
     @EnvironmentObject private var appVM: AppViewModel
 
-    @State private var itemName = ""
     @State private var amountText = ""
     @State private var selectedCategory: IngredientCategory = .meat
     @State private var selectedUnit: UnitType = .kg
@@ -70,12 +69,24 @@ struct StorageView: View {
 
     private var inputPanel: some View {
         VStack(spacing: 18) {
-            TextField("Input your purchased item", text: $itemName)
-                .font(.title3)
-                .padding(.horizontal, 20)
-                .frame(height: 52)
-                .background(Color.white)
-                .clipShape(Capsule())
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.gray)
+                TextField("Search or add ingredient...", text: $appVM.storageVM.searchText)
+                    .font(.title3)
+                if !appVM.storageVM.searchText.isEmpty {
+                    Button {
+                        appVM.storageVM.searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 52)
+            .background(Color.white)
+            .clipShape(Capsule())
 
             HStack(spacing: 12) {
                 categoryMenu
@@ -151,12 +162,12 @@ struct StorageView: View {
         Button {
             let amount = Double(amountText) ?? 0
             appVM.storageVM.addIngredient(
-                name: itemName,
+                name: appVM.storageVM.searchText,
                 category: selectedCategory,
                 amount: amount,
                 unit: selectedUnit
             )
-            itemName = ""
+            appVM.storageVM.searchText = ""
             amountText = ""
         } label: {
             Text("Create")
