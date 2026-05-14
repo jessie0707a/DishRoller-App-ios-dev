@@ -6,138 +6,154 @@
 import SwiftUI
 
 struct CongratulationsView: View {
-    let recipeName: String
+    let recipe: Recipe
+    @Binding var isPresented: Bool
     @EnvironmentObject var appVM: AppViewModel
-
-    @State private var bounce = false
-    @State private var floatA = false
-    @State private var floatB = false
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.black.opacity(0.6)
+                .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                Spacer()
-
-                celebrationSection
-
-                Spacer().frame(height: 36)
-
-                recipeNameCard
-
-                Spacer().frame(height: 16)
-
-                Text("Your ingredients have been updated in storage.")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(Color(.systemGray))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
-
-                Spacer()
-
-                rollAgainButton
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 50)
-            }
-        }
-        .navigationBarHidden(true)
-        .navigationBarBackButtonHidden(true)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                bounce = true
-            }
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                floatA = true
-            }
-            withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
-                floatB = true
-            }
+            popupCard
+                .padding(.horizontal, 24)
         }
     }
 
-    private var celebrationSection: some View {
-        VStack(spacing: 24) {
-            ZStack {
-                Text("🎉")
-                    .font(.system(size: 44))
-                    .offset(x: -90, y: floatA ? -18 : 10)
-
-                Text("✨")
-                    .font(.system(size: 32))
-                    .offset(x: 95, y: floatB ? -12 : 16)
-
-                Text("🎊")
-                    .font(.system(size: 36))
-                    .offset(x: -60, y: floatB ? 28 : -8)
-
-                Text("⭐️")
-                    .font(.system(size: 28))
-                    .offset(x: 70, y: floatA ? 22 : -10)
-
-                Text("🏆")
-                    .font(.system(size: 96))
-                    .scaleEffect(bounce ? 1.08 : 0.93)
+    private var popupCard: some View {
+        VStack(spacing: 0) {
+            // Close button row
+            HStack {
+                Spacer()
+                Button {
+                    isPresented = false
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.black)
+                    }
+                }
             }
-            .frame(height: 180)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
 
-            VStack(spacing: 8) {
-                Text("Congratulations!")
-                    .font(.system(size: 36, weight: .black))
-                    .foregroundColor(.yellow)
+            Text("Congratulations!")
+                .font(.system(size: 26, weight: .black))
+                .foregroundColor(.yellow)
+                .padding(.top, 4)
 
-                Text("You cooked it!")
-                    .font(.title2)
-                    .fontWeight(.black)
-                    .foregroundColor(.white)
-            }
-        }
-    }
+            dishIcon
+                .padding(.vertical, 8)
 
-    private var recipeNameCard: some View {
-        VStack(spacing: 6) {
-            Text("Today's dish")
+            Text("Amazing job you've done !\nIngredients will be deducted, please\nenjoy your delicious dish~")
                 .font(.subheadline)
                 .fontWeight(.bold)
-                .foregroundColor(Color(.systemGray))
-
-            Text(recipeName)
-                .font(.title3)
-                .fontWeight(.black)
-                .foregroundColor(.black)
+                .foregroundColor(.yellow)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-        }
-        .frame(maxWidth: .infinity)
-        .background(Color.yellow)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .padding(.horizontal, 32)
-    }
+                .padding(.horizontal, 24)
 
-    private var rollAgainButton: some View {
-        Button {
-            appVM.selectedTab = 1
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.headline.weight(.black))
-                Text("Roll Again!")
+            Button {
+                appVM.consumeRecipeIngredients(for: recipe)
+                isPresented = false
+            } label: {
+                Text("Finished & Leave")
                     .font(.headline)
                     .fontWeight(.black)
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(Color.yellow)
+                    .clipShape(Capsule())
             }
-            .foregroundColor(.black)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(Color.yellow)
-            .clipShape(Capsule())
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 24)
         }
+        .background(Color.black)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(Color.yellow, lineWidth: 2)
+        )
+    }
+
+    private var dishIcon: some View {
+        ZStack {
+            // Steam lines
+            HStack(spacing: 10) {
+                ForEach(0..<3, id: \.self) { _ in
+                    SteamCurve()
+                        .stroke(Color.yellow, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .frame(width: 10, height: 20)
+                }
+            }
+            .offset(y: -48)
+
+            // Dome knob
+            Circle()
+                .stroke(Color.yellow, lineWidth: 2)
+                .frame(width: 8, height: 8)
+                .offset(y: -30)
+
+            // Dome
+            DomePath()
+                .stroke(Color.yellow, lineWidth: 2.5)
+                .frame(width: 76, height: 38)
+                .offset(y: -10)
+
+            // Tray base
+            Capsule()
+                .stroke(Color.yellow, lineWidth: 2.5)
+                .frame(width: 96, height: 7)
+                .offset(y: 10)
+
+            // Hand
+            Image(systemName: "hand.raised")
+                .font(.system(size: 44, weight: .thin))
+                .foregroundColor(.yellow)
+                .offset(y: 40)
+        }
+        .frame(height: 130)
+    }
+}
+
+private struct SteamCurve: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addCurve(
+            to: CGPoint(x: rect.midX, y: rect.minY),
+            control1: CGPoint(x: rect.maxX, y: rect.maxY * 0.65),
+            control2: CGPoint(x: rect.minX, y: rect.maxY * 0.35)
+        )
+        return path
+    }
+}
+
+private struct DomePath: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addCurve(
+            to: CGPoint(x: rect.maxX, y: rect.maxY),
+            control1: CGPoint(x: rect.width * 0.15, y: rect.minY),
+            control2: CGPoint(x: rect.width * 0.85, y: rect.minY)
+        )
+        return path
     }
 }
 
 #Preview {
-    let appVM = AppViewModel.previewSample
-    CongratulationsView(recipeName: "Black Pepper Garlic Chicken")
-        .environmentObject(appVM)
+    ZStack {
+        Color.gray.opacity(0.3).ignoresSafeArea()
+        let appVM = AppViewModel.previewSample
+        if let recipe = appVM.currentRecipe {
+            CongratulationsView(recipe: recipe, isPresented: .constant(true))
+                .environmentObject(appVM)
+        }
+    }
 }

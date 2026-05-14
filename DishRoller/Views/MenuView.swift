@@ -12,7 +12,6 @@ struct MenuView: View {
     @EnvironmentObject var appVM: AppViewModel
     @StateObject private var vm = MenuViewModel()
     @State private var showCongratulations = false
-    @State private var cookedRecipeName: String = ""
 
     var body: some View {
         NavigationStack {
@@ -26,8 +25,6 @@ struct MenuView: View {
                             menuVM: vm,
                             storageIngredients: appVM.storageVM.ingredients,
                             onFinished: {
-                                appVM.consumeRecipeIngredients(for: recipe)
-                                cookedRecipeName = recipe.title
                                 showCongratulations = true
                             },
                             onRegenerate: {
@@ -48,10 +45,6 @@ struct MenuView: View {
                 .padding()
             }
             .navigationBarHidden(true)
-            .navigationDestination(isPresented: $showCongratulations) {
-                CongratulationsView(recipeName: cookedRecipeName)
-                    .environmentObject(appVM)
-            }
         }
         .overlay(alignment: .top) {
             if vm.isRegenerating {
@@ -69,6 +62,12 @@ struct MenuView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(vm.regenerateError ?? "")
+        }
+        .overlay {
+            if showCongratulations, let recipe = appVM.currentRecipe {
+                CongratulationsView(recipe: recipe, isPresented: $showCongratulations)
+                    .environmentObject(appVM)
+            }
         }
     }
 
