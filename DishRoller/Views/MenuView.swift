@@ -11,6 +11,7 @@ import Combine
 struct MenuView: View {
     @EnvironmentObject var appVM: AppViewModel
     @StateObject private var vm = MenuViewModel()
+    @State private var showCongratulations = false
 
     var body: some View {
         NavigationStack {
@@ -22,7 +23,19 @@ struct MenuView: View {
                         RecipeCardView(
                             recipe: recipe,
                             menuVM: vm,
-                            storageIngredients: appVM.storageVM.ingredients
+                            storageIngredients: appVM.storageVM.ingredients,
+                            onFinished: {
+                                showCongratulations = true
+                            },
+                            onRegenerate: {
+                                guard let context = appVM.currentRecipeContext else { return }
+                                if let newRecipe = await vm.regenerateRecipe(
+                                    context: context,
+                                    avoidancePrompt: appVM.avoidanceVM.selectedAvoidancePrompt
+                                ) {
+                                    appVM.currentRecipe = newRecipe
+                                }
+                            }
                         )
                         .environmentObject(appVM)
                     } else {
@@ -33,6 +46,59 @@ struct MenuView: View {
             }
             .navigationBarHidden(true)
         }
+        .overlay(alignment: .top) {
+            if vm.isRegenerating {
+                regeneratingCard
+                    .padding(.top, 88)
+                    .padding(.horizontal, 24)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.78), value: vm.isRegenerating)
+        .alert("Could not regenerate", isPresented: Binding(
+            get: { vm.regenerateError != nil },
+            set: { _ in vm.regenerateError = nil }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(vm.regenerateError ?? "")
+        }
+        .overlay {
+            if showCongratulations, let recipe = appVM.currentRecipe {
+                CongratulationsView(recipe: recipe, isPresented: $showCongratulations)
+                    .environmentObject(appVM)
+            }
+        }
+    }
+
+    private var regeneratingCard: some View {
+        HStack(spacing: 14) {
+            Text("🪄")
+                .font(.system(size: 34))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Generating magic...")
+                    .font(.headline)
+                    .fontWeight(.black)
+                    .foregroundColor(.black)
+
+                Text("Cooking up a new recipe")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.gray)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxWidth: 320)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
     }
 
     private var header: some View {
@@ -81,6 +147,8 @@ private struct RecipeCardView: View {
     let recipe: Recipe
     let menuVM: MenuViewModel
     let storageIngredients: [Ingredient]
+    let onFinished: () -> Void
+    let onRegenerate: () async -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -140,10 +208,54 @@ private struct RecipeCardView: View {
                 .fontWeight(.black)
 
             ProcedureStepCardsView(steps: recipe.procedure)
+
+            actionButtons
         }
         .padding()
         .background(Color.yellow)
         .clipShape(RoundedRectangle(cornerRadius: 24))
+    }
+
+    private var actionButtons: some View {
+        VStack(spacing: 12) {
+            Button {
+                onFinished()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark")
+                        .font(.headline.weight(.black))
+                    Text("Finished!")
+                        .font(.headline)
+                        .fontWeight(.black)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(Color.black)
+                .clipShape(Capsule())
+            }
+            .disabled(menuVM.isRegenerating)
+
+            Button {
+                Task { await onRegenerate() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.headline.weight(.black))
+                    Text("Regenerate")
+                        .font(.headline)
+                        .fontWeight(.black)
+                }
+                .foregroundColor(.black)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(Color.white)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.black, lineWidth: 1.5))
+            }
+            .disabled(menuVM.isRegenerating || appVM.currentRecipeContext == nil)
+        }
+        .padding(.top, 4)
     }
 }
 
