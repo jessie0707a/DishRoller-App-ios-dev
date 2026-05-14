@@ -181,10 +181,17 @@ struct DishRollerView: View {
                 HStack(spacing: 16) {
                     Button {
                         Task {
+                            let context = RecipeGenerationContext(
+                                ingredients: vm.selectedResults,
+                                time: vm.selectedTime,
+                                type: vm.selectedType,
+                                style: vm.selectedStyle,
+                                customPreferences: vm.customPreferences
+                            )
                             if let recipe = await vm.generateRecipe(
                                 avoidancePrompt: appVM.avoidanceVM.selectedAvoidancePrompt
                             ) {
-                                appVM.openMenu(with: recipe)
+                                appVM.openMenu(with: recipe, context: context)
                             }
                         }
                     } label: {

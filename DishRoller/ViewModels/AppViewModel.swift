@@ -8,9 +8,18 @@
 import Combine
 import Foundation
 
+struct RecipeGenerationContext {
+    var ingredients: [Ingredient]
+    var time: CookingTime
+    var type: DishType
+    var style: FlavourStyle
+    var customPreferences: String
+}
+
 final class AppViewModel: ObservableObject {
     @Published var selectedTab: Int = 0
     @Published var currentRecipe: Recipe?
+    @Published var currentRecipeContext: RecipeGenerationContext?
 
     @Published var storageVM = StorageViewModel()
     @Published var savedRecipesVM = SavedRecipesViewModel()
@@ -22,9 +31,19 @@ final class AppViewModel: ObservableObject {
         bindChildViewModels()
     }
 
-    func openMenu(with recipe: Recipe) {
+    func openMenu(with recipe: Recipe, context: RecipeGenerationContext? = nil) {
         currentRecipe = syncedRecipeState(for: recipe)
+        currentRecipeContext = context
         selectedTab = 2
+    }
+
+    func consumeRecipeIngredients(for recipe: Recipe) {
+        for recipeIngredient in recipe.ingredients {
+            guard let match = storageVM.ingredients.first(where: {
+                IngredientNameMatcher.matches(storageName: $0.name, recipeName: recipeIngredient.name)
+            }) else { continue }
+            storageVM.decrease(match)
+        }
     }
 
     func toggleSavedState(for recipe: Recipe) {
