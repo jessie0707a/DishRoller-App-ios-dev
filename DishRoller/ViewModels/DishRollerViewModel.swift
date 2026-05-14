@@ -37,6 +37,20 @@ final class DishRollerViewModel: ObservableObject {
         selectedResults.append(ingredient)
     }
 
+    func addPreferredIngredient(named name: String, from ingredients: [Ingredient]) -> Bool {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else { return false }
+
+        guard let matchedIngredient = ingredients.first(where: {
+            $0.amount > 0 && IngredientNameMatcher.matches(storageName: $0.name, recipeName: cleanName)
+        }) else {
+            return false
+        }
+
+        addSelection(matchedIngredient)
+        return true
+    }
+
     func removeResult(_ ingredient: Ingredient) {
         selectedResults.removeAll { $0.id == ingredient.id }
     }

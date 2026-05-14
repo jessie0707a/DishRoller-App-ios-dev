@@ -28,6 +28,8 @@ struct DishRollerView: View {
     @State private var selectedComboCategories: Set<IngredientCategory> = [.meat, .seafood, .veg]
     @State private var magicPulse = false
     @State private var magicRotation = 0.0
+    @State private var storageNoticeMessage: String?
+    @State private var storageNoticeTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -53,7 +55,16 @@ struct DishRollerView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .overlay(alignment: .top) {
+            if let storageNoticeMessage {
+                storageNoticeCard(message: storageNoticeMessage)
+                    .padding(.top, 88)
+                    .padding(.horizontal, 24)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .animation(.spring(response: 0.35, dampingFraction: 0.78), value: vm.isLoading)
+        .animation(.spring(response: 0.3, dampingFraction: 0.86), value: storageNoticeMessage)
         .alert("Notice", isPresented: Binding(
             get: { vm.errorMessage != nil },
             set: { _ in vm.errorMessage = nil }
@@ -67,6 +78,7 @@ struct DishRollerView: View {
         }
         .onDisappear {
             stopSpinTimer()
+            storageNoticeTask?.cancel()
             updateMagicAnimation(isLoading: false)
         }
     }
@@ -260,6 +272,22 @@ struct DishRollerView: View {
         .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
     }
 
+    private func storageNoticeCard(message: String) -> some View {
+        Text(message)
+            .font(.subheadline)
+            .fontWeight(.black)
+            .foregroundColor(.black)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
+    }
+
     private var preferenceCapsule: some View {
         TextField("Preferences", text: $vm.customPreferences)
             .font(.subheadline)
@@ -273,11 +301,12 @@ struct DishRollerView: View {
             .background(Color.white)
             .clipShape(Capsule())
             .accessibilityLabel("Recipe preferences")
+            .onSubmit(addPreferredIngredient)
     }
 
     private var addIngredientButton: some View {
         Button {
-            vm.roll(from: wheelIngredients)
+            addPreferredIngredient()
         } label: {
             Image(systemName: "plus")
                 .font(.title2.weight(.bold))
@@ -289,6 +318,25 @@ struct DishRollerView: View {
                     Circle()
                         .stroke(Color.white, lineWidth: 1.5)
                 )
+        }
+    }
+
+    private func addPreferredIngredient() {
+        if vm.addPreferredIngredient(named: vm.customPreferences, from: appVM.storageVM.ingredients) {
+            vm.customPreferences = ""
+        } else {
+            showStorageNotice("sorry, it was out of storage")
+        }
+    }
+
+    private func showStorageNotice(_ message: String) {
+        storageNoticeTask?.cancel()
+        storageNoticeMessage = message
+
+        storageNoticeTask = Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            storageNoticeMessage = nil
         }
     }
 
