@@ -1,3 +1,6 @@
+Github link: https://github.com/jessie0707a/DishRoller-App-ios-dev.git
+
+
 # DishRoller
 
 DishRoller is a SwiftUI iOS app that helps users turn available ingredients into recipe ideas. Users can manage ingredients in storage, randomly select ingredients, generate a recipe with preferred cooking time, dish type, and flavour style, then save recipes for later.
