@@ -37,6 +37,7 @@ struct DishRollerView: View {
                     controlPanel
                     modeBar
                     wheelView
+                        .padding(.top,-20)
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 10)
@@ -447,7 +448,7 @@ struct DishRollerView: View {
     }
 
     private var wheelView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             if wheelIngredients.isEmpty {
                 Text("Add ingredients in Storage to use the turntable.")
                     .font(.subheadline)
@@ -458,7 +459,7 @@ struct DishRollerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 24))
             } else {
                 GeometryReader { geometry in
-                    let wheelSize = geometry.size.width * 1.45
+                    let wheelSize = geometry.size.width * 1.4
 
                     ZStack {
                         turntableWheel
@@ -471,8 +472,8 @@ struct DishRollerView: View {
                         VStack(spacing: 0) {
                             Triangle()
                                 .fill(Color.black)
-                                .frame(width: 12, height: 84)
-                                .shadow(color: .black.opacity(0.18), radius: 4, y: 1)
+                                .frame(width: 16, height: 100)
+                                .shadow(color: .black.opacity(0.18), radius: 8, y: 1)
 
                             Button {
                                 toggleWheelSpin()
@@ -493,7 +494,7 @@ struct DishRollerView: View {
                             .buttonStyle(.plain)
                             .offset(y: -10)
                         }
-                        .offset(x:0,y:60)
+                        .offset(x:0,y:50)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .clipped()
@@ -506,7 +507,7 @@ struct DishRollerView: View {
     private var turntableWheel: some View {
         GeometryReader { geometry in
             let size = min(geometry.size.width, geometry.size.height)
-            let radius = size * 0.31
+            let radius = size * 0.38
             let segmentAngle = 360.0 / Double(wheelIngredients.count)
 
             ZStack {
@@ -525,14 +526,14 @@ struct DishRollerView: View {
                     WheelSegmentShape(
                         startAngle: .degrees(startAngle),
                         endAngle: .degrees(endAngle),
-                        innerRadiusRatio: 0.32
+                        innerRadiusRatio: 0.55
                     )
                     .fill(index.isMultiple(of: 2) ? Color(.systemGray6) : Color(.systemGray5))
                     .overlay(
                         WheelSegmentShape(
                             startAngle: .degrees(startAngle),
                             endAngle: .degrees(endAngle),
-                            innerRadiusRatio: 0.34
+                            innerRadiusRatio: 0.55
                         )
                         .stroke(Color.black, lineWidth: 8)
                     )
@@ -552,7 +553,7 @@ struct DishRollerView: View {
 
                 Circle()
                     .stroke(Color.yellow, lineWidth: 6)
-                    .padding(size * 0.34)
+                    .padding(size * 0.235)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
@@ -806,9 +807,9 @@ struct WheelSegmentLabel: View {
 struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         path.closeSubpath()
         return path
     }
