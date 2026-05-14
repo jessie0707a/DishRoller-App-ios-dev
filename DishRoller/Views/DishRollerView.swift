@@ -43,7 +43,7 @@ struct DishRollerView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 10)
-                .padding(.bottom, 14)
+                .padding(.bottom, 8)
             }
             .navigationBarHidden(true)
         }
@@ -174,7 +174,7 @@ struct DishRollerView: View {
                     .foregroundColor(.black)
 
                 FlowResultView(results: vm.selectedResults) { ingredient in
-                    vm.removeResult(ingredient)
+                    removeSelectedResult(ingredient)
                 }
                 .frame(minHeight: 46, alignment: .leading)
 
@@ -642,6 +642,15 @@ struct DishRollerView: View {
         isSpinning = false
         remainingSpins = 3
         vm.clearResults()
+    }
+
+    private func removeSelectedResult(_ ingredient: Ingredient) {
+        let resultCount = vm.selectedResults.count
+        vm.removeResult(ingredient)
+
+        if vm.selectedResults.count < resultCount {
+            remainingSpins = min(remainingSpins + 1, 3)
+        }
     }
 
     private func updateMagicAnimation(isLoading: Bool) {
