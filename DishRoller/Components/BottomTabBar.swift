@@ -17,8 +17,12 @@ struct BottomTabBar: View {
             tabButton(index: 2, title: "Menu", icon: "book")
         }
         .padding(8)
-        .background(Color.black)
-        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 99)
+                .fill(Color.black)
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, -6)
     }
 
     private func tabButton(index: Int, title: String, icon: String) -> some View {
