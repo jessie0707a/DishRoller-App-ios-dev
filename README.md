@@ -1,4 +1,5 @@
 Github link: https://github.com/jessie0707a/DishRoller-App-ios-dev.git
+Demonstration Slide: https://docs.google.com/presentation/d/1bpnsIetRf4_kJMkmZMtC2FcnTyNjB-CB_DihLRBdiQQ/edit?slide=id.g3e1150f7baa_0_88#slide=id.g3e1150f7baa_0_88
 
 
 # DishRoller
