@@ -482,7 +482,7 @@ struct DishRollerView: View {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
         .filter {
-            selectedComboCategories.contains($0.category)
+            $0.amount > 0 && selectedComboCategories.contains($0.category)
         }
     }
 

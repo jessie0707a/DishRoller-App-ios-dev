@@ -37,7 +37,14 @@ final class StorageViewModel: ObservableObject {
         }
     }
 
-    func addIngredient(name: String, category: IngredientCategory, amount: Double, unit: UnitType) {
+    func addIngredient(
+        name: String,
+        category: IngredientCategory,
+        amount: Double,
+        unit: UnitType,
+        iconName: String? = nil,
+        imageData: Data? = nil
+    ) {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty, amount > 0 else { return }
 
@@ -45,12 +52,21 @@ final class StorageViewModel: ObservableObject {
             $0.name.lowercased() == cleanName.lowercased() && $0.unit == unit
         }) {
             ingredients[index].amount += amount
+            ingredients[index].category = category
+            if let iconName {
+                ingredients[index].iconName = iconName
+            }
+            if let imageData {
+                ingredients[index].imageData = imageData
+            }
         } else {
             let newIngredient = Ingredient(
                 name: cleanName,
                 category: category,
                 amount: amount,
-                unit: unit
+                unit: unit,
+                iconName: iconName,
+                imageData: imageData
             )
             ingredients.append(newIngredient)
         }

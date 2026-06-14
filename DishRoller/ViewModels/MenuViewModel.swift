@@ -22,7 +22,10 @@ final class MenuViewModel: ObservableObject {
 
     func ingredientExists(_ recipeIngredient: RecipeIngredient, storageIngredients: [Ingredient]) -> Bool {
         storageIngredients.contains {
-            $0.name.lowercased() == recipeIngredient.name.lowercased()
+            $0.amount > 0 && IngredientNameMatcher.matches(
+                storageName: $0.name,
+                recipeName: recipeIngredient.name
+            )
         }
     }
 

@@ -28,7 +28,10 @@ final class DishRollerViewModel: ObservableObject {
         }
 
         let available = ingredients.filter(isAvailableForSelection)
-        guard let random = available.randomElement() else { return }
+        guard let random = available.randomElement() else {
+            errorMessage = "No available ingredients match the current selection."
+            return
+        }
         addSelection(random)
     }
 
@@ -61,6 +64,7 @@ final class DishRollerViewModel: ObservableObject {
 
     private func isAvailableForSelection(_ ingredient: Ingredient) -> Bool {
         guard selectedResults.count < 5 else { return false }
+        guard ingredient.amount > 0 else { return false }
 
         return !selectedResults.contains {
             $0.name.lowercased() == ingredient.name.lowercased()

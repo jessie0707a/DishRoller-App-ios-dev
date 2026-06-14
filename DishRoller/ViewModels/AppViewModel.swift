@@ -53,8 +53,9 @@ final class AppViewModel: ObservableObject {
             savedRecipesVM.saveRecipe(recipe)
         }
 
-        guard currentRecipe?.id == recipe.id else { return }
-        currentRecipe?.isSaved.toggle()
+        guard var updatedCurrentRecipe = currentRecipe, updatedCurrentRecipe.id == recipe.id else { return }
+        updatedCurrentRecipe.isSaved = savedRecipesVM.isSaved(recipe)
+        currentRecipe = updatedCurrentRecipe
     }
 
     private func bindChildViewModels() {
