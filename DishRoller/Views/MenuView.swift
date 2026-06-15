@@ -195,7 +195,11 @@ private struct RecipeCardView: View {
                         exists: menuVM.ingredientExists(
                             ingredient,
                             storageIngredients: storageIngredients
-                        )
+                        ),
+                        isInShoppingList: appVM.storageVM.isInShoppingList(ingredient, recipeName: recipe.title),
+                        onAddToShoppingList: {
+                            appVM.storageVM.addShoppingListItem(from: ingredient, recipeName: recipe.title)
+                        }
                     )
                 }
             }

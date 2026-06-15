@@ -10,8 +10,11 @@ import Combine
 
 final class StorageViewModel: ObservableObject {
     @Published var ingredients: [Ingredient] = []
+    @Published var shoppingListItems: [ShoppingListItem] = []
     @Published var selectedFilter: IngredientCategory? = nil
     @Published var searchText: String = ""
+
+    private let shoppingListKey = "dishroller.shoppingListItems"
 
     let commonIngredients: [String: [String]] = [
         "MEAT": ["Chicken", "Beef", "Pork", "Lamb", "Bacon"],
@@ -23,6 +26,7 @@ final class StorageViewModel: ObservableObject {
 
     init() {
         ingredients = StorageService.shared.loadIngredients()
+        shoppingListItems = loadShoppingListItems()
 
         if ingredients.isEmpty {
             loadSampleData()
@@ -96,6 +100,67 @@ final class StorageViewModel: ObservableObject {
         save()
     }
 
+    func addShoppingListItem(from recipeIngredient: RecipeIngredient, recipeName: String) {
+        let cleanIngredientName = recipeIngredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanRecipeName = recipeName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanIngredientName.isEmpty, !cleanRecipeName.isEmpty else { return }
+
+        let normalizedAmount = recipeIngredient.amount.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !isInShoppingList(recipeIngredient, recipeName: cleanRecipeName) else { return }
+
+        let newSource = ShoppingListSource(amountText: normalizedAmount, recipeName: cleanRecipeName)
+
+        if let existingIndex = shoppingListItems.firstIndex(where: {
+            IngredientNameMatcher.matches(storageName: $0.ingredientName, recipeName: cleanIngredientName)
+        }) {
+            shoppingListItems[existingIndex].sources.append(newSource)
+        } else {
+            shoppingListItems.append(
+                ShoppingListItem(
+                    ingredientName: cleanIngredientName,
+                    sources: [newSource]
+                )
+            )
+        }
+        saveShoppingListItems()
+    }
+
+    func isInShoppingList(_ recipeIngredient: RecipeIngredient, recipeName: String) -> Bool {
+        let cleanIngredientName = recipeIngredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanRecipeName = recipeName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedAmount = recipeIngredient.amount.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return shoppingListItems.contains { item in
+            IngredientNameMatcher.matches(storageName: item.ingredientName, recipeName: cleanIngredientName) &&
+            item.sources.contains {
+                $0.recipeName.localizedCaseInsensitiveCompare(cleanRecipeName) == .orderedSame &&
+                $0.amountText.localizedCaseInsensitiveCompare(normalizedAmount) == .orderedSame
+            }
+        }
+    }
+
+    func completeShoppingListItem(_ item: ShoppingListItem) {
+        let category = categoryGuess(for: item.ingredientName)
+
+        for source in item.sources {
+            let parsedAmount = parseShoppingAmount(source.amountText)
+            addIngredient(
+                name: item.ingredientName,
+                category: category,
+                amount: parsedAmount.amount,
+                unit: parsedAmount.unit,
+                iconName: category.categoryIcon
+            )
+        }
+
+        deleteShoppingListItem(item)
+    }
+
+    func deleteShoppingListItem(_ item: ShoppingListItem) {
+        shoppingListItems.removeAll { $0.id == item.id }
+        saveShoppingListItems()
+    }
+
     private func step(for unit: UnitType) -> Double {
         switch unit {
         case .kg: return 0.1
@@ -108,6 +173,45 @@ final class StorageViewModel: ObservableObject {
 
     private func save() {
         StorageService.shared.saveIngredients(ingredients)
+    }
+
+    private func saveShoppingListItems() {
+        guard let data = try? JSONEncoder().encode(shoppingListItems) else { return }
+        UserDefaults.standard.set(data, forKey: shoppingListKey)
+    }
+
+    private func loadShoppingListItems() -> [ShoppingListItem] {
+        guard let data = UserDefaults.standard.data(forKey: shoppingListKey) else { return [] }
+        return (try? JSONDecoder().decode([ShoppingListItem].self, from: data)) ?? []
+    }
+
+    private func parseShoppingAmount(_ amountText: String) -> (amount: Double, unit: UnitType) {
+        let normalizedText = amountText.replacingOccurrences(of: ",", with: ".")
+        let amountMatch = normalizedText.range(
+            of: #"[0-9]+(\.[0-9]+)?"#,
+            options: .regularExpression
+        )
+        let amount = amountMatch.map { Double(normalizedText[$0]) ?? 1 } ?? 1
+        let lowercasedTokens = normalizedText
+            .lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+
+        if lowercasedTokens.contains(where: { $0 == "kg" || $0.hasSuffix("kg") }) { return (amount, .kg) }
+        if lowercasedTokens.contains(where: { $0 == "ml" || $0.hasSuffix("ml") }) { return (amount, .ml) }
+        if lowercasedTokens.contains(where: { ["l", "liter", "litre", "liters", "litres"].contains($0) }) { return (amount, .liter) }
+        if lowercasedTokens.contains(where: { $0 == "g" || ($0.hasSuffix("g") && Double($0.dropLast()) != nil) }) { return (amount, .g) }
+        return (amount, .pcs)
+    }
+
+    private func categoryGuess(for ingredientName: String) -> IngredientCategory {
+        for (categoryName, names) in commonIngredients {
+            if names.contains(where: { IngredientNameMatcher.matches(storageName: $0, recipeName: ingredientName) }),
+               let category = IngredientCategory(rawValue: categoryName) {
+                return category
+            }
+        }
+        return .veg
     }
 
     private func loadSampleData() {

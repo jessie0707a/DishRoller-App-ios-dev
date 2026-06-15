@@ -150,7 +150,11 @@ private struct SavedRecipeDetailView: View {
                         if compareWithStorage {
                             RecipeIngredientRow(
                                 ingredient: ingredient,
-                                exists: ingredientExists(ingredient)
+                                exists: ingredientExists(ingredient),
+                                isInShoppingList: appVM.storageVM.isInShoppingList(ingredient, recipeName: recipe.title),
+                                onAddToShoppingList: {
+                                    appVM.storageVM.addShoppingListItem(from: ingredient, recipeName: recipe.title)
+                                }
                             )
                         } else {
                             RecipeIngredientRow(
@@ -180,7 +184,10 @@ private struct SavedRecipeDetailView: View {
 
     private func ingredientExists(_ recipeIngredient: RecipeIngredient) -> Bool {
         appVM.storageVM.ingredients.contains {
-            $0.name.lowercased() == recipeIngredient.name.lowercased()
+            $0.amount > 0 && IngredientNameMatcher.matches(
+                storageName: $0.name,
+                recipeName: recipeIngredient.name
+            )
         }
     }
 }

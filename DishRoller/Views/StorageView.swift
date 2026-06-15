@@ -47,27 +47,9 @@ struct StorageView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .background(storageBackground)
-        }
-        .overlay(alignment: .bottomTrailing) {
-            Button {
-                showAddFoodSheet = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title.weight(.black))
-                    .foregroundColor(.black)
-                    .frame(width: 62, height: 62)
-                    .background(Color.yellow)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.black, lineWidth: 3)
-                    )
-                    .shadow(color: .black.opacity(0.18), radius: 14, y: 8)
+            .overlay(alignment: .bottomTrailing) {
+                addFoodButton
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Add food item")
-            .padding(.trailing, 22)
-            .padding(.bottom, 18)
         }
         .sheet(isPresented: $showAddFoodSheet) {
             AddFoodItemSheet(storageVM: appVM.storageVM)
@@ -81,6 +63,28 @@ struct StorageView: View {
         }
     }
 
+    private var addFoodButton: some View {
+        Button {
+            showAddFoodSheet = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.title.weight(.black))
+                .foregroundColor(.black)
+                .frame(width: 62, height: 62)
+                .background(Color.yellow)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.black, lineWidth: 3)
+                )
+                .shadow(color: .black.opacity(0.18), radius: 14, y: 8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add food item")
+        .padding(.trailing, 22)
+        .padding(.bottom, 18)
+    }
+
     private var header: some View {
         HStack(alignment: .center, spacing: 12) {
             Text("Fresh Food Storage")
@@ -92,7 +96,7 @@ struct StorageView: View {
             Spacer()
 
             NavigationLink {
-                OnlineShoppingView()
+                OnlineShoppingView(storageVM: appVM.storageVM)
             } label: {
                 Image(systemName: "cart")
                     .font(.title3.weight(.bold))

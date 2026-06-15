@@ -1,0 +1,98 @@
+//
+//  ShoppingListItem.swift
+//  DishRoller
+//
+
+import Foundation
+
+struct ShoppingListSource: Identifiable, Codable, Equatable {
+    let id: UUID
+    var amountText: String
+    var recipeName: String
+
+    init(id: UUID = UUID(), amountText: String, recipeName: String) {
+        self.id = id
+        self.amountText = amountText
+        self.recipeName = recipeName
+    }
+}
+
+struct ShoppingListItem: Identifiable, Codable, Equatable {
+    let id: UUID
+    var ingredientName: String
+    var sources: [ShoppingListSource]
+    var addedAt: Date
+
+    var amountText: String {
+        sources
+            .map { $0.amountText.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " + ")
+    }
+
+    var recipeName: String {
+        var seenNames: Set<String> = []
+        return sources
+            .map { $0.recipeName.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .filter { seenNames.insert($0.lowercased()).inserted }
+            .joined(separator: ", ")
+    }
+
+    init(
+        id: UUID = UUID(),
+        ingredientName: String,
+        amountText: String,
+        recipeName: String,
+        addedAt: Date = Date()
+    ) {
+        self.id = id
+        self.ingredientName = ingredientName
+        self.sources = [ShoppingListSource(amountText: amountText, recipeName: recipeName)]
+        self.addedAt = addedAt
+    }
+
+    init(
+        id: UUID = UUID(),
+        ingredientName: String,
+        sources: [ShoppingListSource],
+        addedAt: Date = Date()
+    ) {
+        self.id = id
+        self.ingredientName = ingredientName
+        self.sources = sources
+        self.addedAt = addedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case ingredientName
+        case sources
+        case amountText
+        case recipeName
+        case addedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        ingredientName = try container.decode(String.self, forKey: .ingredientName)
+        addedAt = try container.decodeIfPresent(Date.self, forKey: .addedAt) ?? Date()
+
+        if let decodedSources = try container.decodeIfPresent([ShoppingListSource].self, forKey: .sources) {
+            sources = decodedSources
+        } else {
+            let amountText = try container.decodeIfPresent(String.self, forKey: .amountText) ?? ""
+            let recipeName = try container.decodeIfPresent(String.self, forKey: .recipeName) ?? ""
+            sources = [ShoppingListSource(amountText: amountText, recipeName: recipeName)]
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(ingredientName, forKey: .ingredientName)
+        try container.encode(sources, forKey: .sources)
+        try container.encode(addedAt, forKey: .addedAt)
+    }
+}
