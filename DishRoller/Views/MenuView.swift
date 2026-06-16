@@ -42,8 +42,11 @@ struct MenuView: View {
                         emptyState
                     }
                 }
-                .padding()
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 92)
             }
+            .background(pageBackground)
             .navigationBarHidden(true)
         }
         .overlay(alignment: .top) {
@@ -104,8 +107,10 @@ struct MenuView: View {
     private var header: some View {
         HStack {
             Text("Today’s Menu")
-                .font(.largeTitle)
-                .fontWeight(.black)
+                .font(.system(size: 28, weight: .black))
+                .foregroundColor(.black)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
             Spacer()
 
@@ -113,14 +118,17 @@ struct MenuView: View {
                 SavedRecipesView()
             } label: {
                 Image(systemName: "star.fill")
-                    .font(.title)
+                    .font(.title3.weight(.bold))
                     .foregroundColor(.black)
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 12)
+                    .frame(width: 72, height: 48)
                     .background(Color.yellow)
                     .clipShape(Capsule())
             }
         }
+    }
+
+    private var pageBackground: Color {
+        Color(red: 0.96, green: 0.95, blue: 0.98)
     }
 
     private var emptyState: some View {

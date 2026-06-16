@@ -16,6 +16,11 @@ struct DishRollerView: View {
         var id: String { rawValue }
     }
 
+    private enum ControlPanelTab {
+        case selection
+        case results
+    }
+
     private let comboCategories: [IngredientCategory] = [.meat, .seafood, .veg]
 
     @EnvironmentObject var appVM: AppViewModel
@@ -30,6 +35,7 @@ struct DishRollerView: View {
     @State private var magicRotation = 0.0
     @State private var storageNoticeMessage: String?
     @State private var storageNoticeTask: Task<Void, Never>?
+    @State private var activeControlPanel: ControlPanelTab = .selection
 
     var body: some View {
         NavigationStack {
@@ -39,12 +45,13 @@ struct DishRollerView: View {
                     controlPanel
                     modeBar
                     wheelView
-                        .padding(.top,-20)
+                        .padding(.top, -30)
                 }
-                .padding(.horizontal, 14)
-                .padding(.top, 10)
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
                 .padding(.bottom, 8)
             }
+            .background(pageBackground)
             .navigationBarHidden(true)
         }
         .overlay(alignment: .top) {
@@ -86,8 +93,10 @@ struct DishRollerView: View {
     private var header: some View {
         HStack {
             Text("DishRoller")
-                .font(.system(size: 26, weight: .black))
-                .fontWeight(.black)
+                .font(.system(size: 28, weight: .black))
+                .foregroundColor(.black)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
             Spacer()
 
@@ -98,8 +107,7 @@ struct DishRollerView: View {
                 Image(systemName: "exclamationmark.circle.fill")
                     .font(.title3.weight(.bold))
                     .foregroundColor(.black)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
+                    .frame(width: 72, height: 48)
                     .background(Color.yellow)
                     .clipShape(Capsule())
             }
@@ -108,126 +116,213 @@ struct DishRollerView: View {
         }
     }
 
+    private var pageBackground: Color {
+        Color(red: 0.96, green: 0.95, blue: 0.98)
+    }
+
     private var controlPanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(spacing: 12) {
-                HStack(alignment: .center, spacing: 10) {
-                    selectionGroup(
-                        title: "Time",
-                        titleMinWidth: 46,
-                        titleView: { Text(vm.selectedTime.rawValue) }
-                    ) {
-                        ForEach(CookingTime.allCases) { time in
-                            Button(time.rawValue) {
-                                vm.selectedTime = time
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        let isSelectionActive = activeControlPanel == .selection
 
-                    selectionGroup(
-                        title: "Type",
-                        titleMinWidth: 42,
-                        titleView: { Text(vm.selectedType.rawValue) }
-                    ) {
-                        ForEach(DishType.allCases) { type in
-                            Button(type.rawValue) {
-                                vm.selectedType = type
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
+        return ZStack(alignment: .top) {
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color.black)
+                .frame(height: controlPanelHeight)
 
-                HStack(alignment: .center, spacing: 10) {
-                    selectionGroup(
-                        title: "Flavour",
-                        titleMinWidth: 60,
-                        titleView: { Text(vm.selectedStyle.rawValue) }
-                    ) {
-                        ForEach(FlavourStyle.allCases) { style in
-                            Button(style.rawValue) {
-                                vm.selectedStyle = style
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            ControlFolderShape(tabOnLeft: !isSelectionActive)
+                .fill(Color.black)
+                .frame(height: controlPanelHeight)
 
-                    HStack(spacing: 8) {
-                        preferenceCapsule
-                        addIngredientButton
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
+            ControlFolderShape(tabOnLeft: isSelectionActive)
+                .fill(Color.yellow)
+                .frame(height: controlPanelHeight)
 
-                comboSelectionGroup
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 14)
-            .padding(.bottom, 12)
-            .background(Color.black)
+            controlPanelTabs
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Results:")
-                    .font(.headline)
-                    .fontWeight(.black)
-                    .foregroundColor(.black)
-
-                FlowResultView(results: vm.selectedResults) { ingredient in
-                    removeSelectedResult(ingredient)
-                }
-                .frame(minHeight: 46, alignment: .leading)
-
-                HStack(spacing: 16) {
-                    Button {
-                        Task {
-                            let context = RecipeGenerationContext(
-                                ingredients: vm.selectedResults,
-                                time: vm.selectedTime,
-                                type: vm.selectedType,
-                                style: vm.selectedStyle,
-                                customPreferences: vm.customPreferences
-                            )
-                            if let recipe = await vm.generateRecipe(
-                                avoidancePrompt: appVM.avoidanceVM.selectedAvoidancePrompt
-                            ) {
-                                appVM.openMenu(with: recipe, context: context)
-                            }
-                        }
-                    } label: {
-                        Text(vm.isLoading ? "Loading..." : "Generate")
-                            .font(.subheadline)
-                            .fontWeight(.black)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 42)
-                            .background(Color.black)
-                            .clipShape(Capsule())
-                    }
-                    .disabled(vm.selectedResults.isEmpty || vm.isLoading)
-
-                    Button {
-                        resetRound()
-                    } label: {
-                        Text("Clear")
-                            .font(.subheadline)
-                            .fontWeight(.black)
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 42)
-                            .background(Color.white)
-                            .clipShape(Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.black, lineWidth: 1.5)
-                            )
-                    }
+            Group {
+                switch activeControlPanel {
+                case .selection:
+                    selectionPanelContent
+                case .results:
+                    resultsPanelContent
                 }
             }
-            .padding(14)
-            .background(Color.yellow)
+            .padding(.horizontal, 16)
+            .padding(.top, 72)
+            .padding(.bottom, 16)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .frame(height: controlPanelHeight)
+        .animation(.spring(response: 0.28, dampingFraction: 0.86), value: activeControlPanel)
+    }
+
+    private var controlPanelHeight: CGFloat {
+        activeControlPanel == .selection ? 218 : 224
+    }
+
+    private var controlPanelTabs: some View {
+        HStack(spacing: 0) {
+            controlPanelTabButton(.selection, title: "Selection")
+                .frame(maxWidth: .infinity)
+
+            controlPanelTabButton(.results, title: "Results")
+                .frame(maxWidth: .infinity)
+        }
+        .frame(height: 60)
+        .padding(.horizontal, 12)
+        .padding(.top, 4)
+    }
+
+    private func controlPanelTabButton(_ tab: ControlPanelTab, title: String) -> some View {
+        Button {
+            activeControlPanel = tab
+        } label: {
+            Text(title)
+                .font(.system(size: 20, weight: .black))
+                .foregroundColor(activeControlPanel == tab ? .black : .yellow)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Show \(title)")
+    }
+
+    private var selectionPanelContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                compactSelectionGroup(
+                    title: "Time",
+                    titleView: { Text(vm.selectedTime.rawValue) }
+                ) {
+                    ForEach(CookingTime.allCases) { time in
+                        Button(time.rawValue) {
+                            vm.selectedTime = time
+                        }
+                    }
+                }
+
+                compactSelectionGroup(
+                    title: "Type",
+                    titleView: { Text(vm.selectedType.rawValue) }
+                ) {
+                    ForEach(DishType.allCases) { type in
+                        Button(type.rawValue) {
+                            vm.selectedType = type
+                        }
+                    }
+                }
+            }
+
+            HStack(spacing: 12) {
+                compactSelectionGroup(
+                    title: "Flavour",
+                    titleView: { Text(vm.selectedStyle.rawValue) }
+                ) {
+                    ForEach(FlavourStyle.allCases) { style in
+                        Button(style.rawValue) {
+                            vm.selectedStyle = style
+                        }
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    preferenceCapsule
+                    addIngredientButton
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            comboMoreMenu
+        }
+    }
+
+    private var resultsPanelContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            FlowResultView(results: vm.selectedResults) { ingredient in
+                removeSelectedResult(ingredient)
+            }
+            .frame(minHeight: 58, alignment: .leading)
+
+            HStack(spacing: 14) {
+                generateButton
+                clearButton
+            }
+        }
+    }
+
+    private struct ControlFolderShape: Shape {
+        let tabOnLeft: Bool
+
+        func path(in rect: CGRect) -> Path {
+            let width = rect.width
+            let height = rect.height
+            let corner: CGFloat = 24
+            let step: CGFloat = 58
+            let curveStart = width * 0.47
+            let curveEnd = width * 0.61
+
+            var path = Path()
+
+            if tabOnLeft {
+                path.move(to: CGPoint(x: corner, y: 0))
+                path.addLine(to: CGPoint(x: curveStart, y: 0))
+                path.addCurve(
+                    to: CGPoint(x: curveEnd, y: step),
+                    control1: CGPoint(x: width * 0.50, y: 0),
+                    control2: CGPoint(x: width * 0.49, y: step)
+                )
+                path.addLine(to: CGPoint(x: width - corner, y: step))
+                path.addQuadCurve(
+                    to: CGPoint(x: width, y: step + corner),
+                    control: CGPoint(x: width, y: step)
+                )
+                path.addLine(to: CGPoint(x: width, y: height - corner))
+                path.addQuadCurve(
+                    to: CGPoint(x: width - corner, y: height),
+                    control: CGPoint(x: width, y: height)
+                )
+                path.addLine(to: CGPoint(x: corner, y: height))
+                path.addQuadCurve(
+                    to: CGPoint(x: 0, y: height - corner),
+                    control: CGPoint(x: 0, y: height)
+                )
+                path.addLine(to: CGPoint(x: 0, y: corner))
+                path.addQuadCurve(
+                    to: CGPoint(x: corner, y: 0),
+                    control: CGPoint(x: 0, y: 0)
+                )
+            } else {
+                path.move(to: CGPoint(x: corner, y: step))
+                path.addLine(to: CGPoint(x: width - curveEnd, y: step))
+                path.addCurve(
+                    to: CGPoint(x: width - curveStart, y: 0),
+                    control1: CGPoint(x: width - width * 0.49, y: step),
+                    control2: CGPoint(x: width - width * 0.50, y: 0)
+                )
+                path.addLine(to: CGPoint(x: width - corner, y: 0))
+                path.addQuadCurve(
+                    to: CGPoint(x: width, y: corner),
+                    control: CGPoint(x: width, y: 0)
+                )
+                path.addLine(to: CGPoint(x: width, y: height - corner))
+                path.addQuadCurve(
+                    to: CGPoint(x: width - corner, y: height),
+                    control: CGPoint(x: width, y: height)
+                )
+                path.addLine(to: CGPoint(x: corner, y: height))
+                path.addQuadCurve(
+                    to: CGPoint(x: 0, y: height - corner),
+                    control: CGPoint(x: 0, y: height)
+                )
+                path.addLine(to: CGPoint(x: 0, y: step + corner))
+                path.addQuadCurve(
+                    to: CGPoint(x: corner, y: step),
+                    control: CGPoint(x: 0, y: step)
+                )
+            }
+
+            path.closeSubpath()
+            return path
+        }
     }
 
     private var generatingMagicCard: some View {
@@ -326,6 +421,106 @@ struct DishRollerView: View {
                         .stroke(Color.white, lineWidth: 1.5)
                 )
         }
+    }
+
+    private var comboMoreMenu: some View {
+        Menu {
+            ForEach(comboCategories) { category in
+                Button {
+                    toggleComboCategory(category)
+                } label: {
+                    HStack {
+                        Text(category.menuTitle)
+                        Spacer()
+                        if selectedComboCategories.contains(category) {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text("More")
+                    .font(.subheadline.weight(.black))
+                    .underline()
+
+                Text(comboSelectionTitle)
+                    .font(.caption.weight(.bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.black))
+            }
+            .foregroundColor(.black.opacity(0.72))
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func compactSelectionGroup<Content: View, Title: View>(
+        title: String,
+        @ViewBuilder titleView: () -> Title,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 18, weight: .black))
+                .foregroundColor(.black)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            menuCapsule(titleView: titleView, content: content)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var generateButton: some View {
+        Button {
+            Task {
+                let context = RecipeGenerationContext(
+                    ingredients: vm.selectedResults,
+                    time: vm.selectedTime,
+                    type: vm.selectedType,
+                    style: vm.selectedStyle,
+                    customPreferences: vm.customPreferences
+                )
+                if let recipe = await vm.generateRecipe(
+                    avoidancePrompt: appVM.avoidanceVM.selectedAvoidancePrompt
+                ) {
+                    appVM.openMenu(with: recipe, context: context)
+                }
+            }
+        } label: {
+            Text(vm.isLoading ? "Loading..." : "Generate")
+                .font(.subheadline.weight(.black))
+                .foregroundColor(.yellow)
+                .frame(maxWidth: .infinity)
+                .frame(height: 42)
+                .background(Color.black)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(vm.selectedResults.isEmpty || vm.isLoading)
+    }
+
+    private var clearButton: some View {
+        Button {
+            resetRound()
+        } label: {
+            Text("Clear")
+                .font(.subheadline.weight(.black))
+                .foregroundColor(.black)
+                .frame(maxWidth: .infinity)
+                .frame(height: 42)
+                .background(Color.white)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.black, lineWidth: 1.5)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private func addPreferredIngredient() {
