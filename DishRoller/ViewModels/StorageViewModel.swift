@@ -34,11 +34,76 @@ final class StorageViewModel: ObservableObject {
     }
 
     var filteredIngredients: [Ingredient] {
-        ingredients.filter { ingredient in
-            let matchesCategory = selectedFilter == nil || ingredient.category == selectedFilter
-            let matchesSearch = searchText.isEmpty || ingredient.name.localizedCaseInsensitiveContains(searchText)
-            return matchesCategory && matchesSearch
+        aggregatedIngredients
+            .filter { ingredient in
+                let matchesCategory = selectedFilter == nil || ingredient.category == selectedFilter
+                let matchesSearch = searchText.isEmpty || ingredient.name.localizedCaseInsensitiveContains(searchText)
+                return matchesCategory && matchesSearch
+            }
+            .sorted(by: storageCardSort)
+    }
+
+    private var aggregatedIngredients: [Ingredient] {
+        var groupedRecords: [String: [Ingredient]] = [:]
+        var orderedKeys: [String] = []
+
+        for ingredient in ingredients where ingredient.amount > 0 {
+            let key = aggregateKey(for: ingredient)
+            if groupedRecords[key] == nil {
+                orderedKeys.append(key)
+                groupedRecords[key] = []
+            }
+            groupedRecords[key]?.append(ingredient)
         }
+
+        return orderedKeys.compactMap { key in
+            guard let records = groupedRecords[key],
+                  let displayRecord = earliestRecord(in: records) ?? records.first else {
+                return nil
+            }
+
+            let earliestExpiryRecord = earliestRecord(in: records)
+            let totalAmount = records.reduce(0) { $0 + $1.amount }
+            return Ingredient(
+                id: displayRecord.id,
+                name: displayRecord.name,
+                category: displayRecord.category,
+                amount: totalAmount,
+                unit: displayRecord.unit,
+                iconName: displayRecord.iconName ?? displayRecord.category.foodIconAssetName,
+                imageData: displayRecord.imageData,
+                expiryDate: earliestExpiryRecord?.expiryDate
+            )
+        }
+    }
+
+    private func storageCardSort(_ first: Ingredient, _ second: Ingredient) -> Bool {
+        switch (first.expiryDate, second.expiryDate) {
+        case let (firstDate?, secondDate?):
+            let firstDay = Calendar.current.startOfDay(for: firstDate)
+            let secondDay = Calendar.current.startOfDay(for: secondDate)
+            if firstDay != secondDay {
+                return firstDay < secondDay
+            }
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        case (nil, nil):
+            break
+        }
+
+        let firstCategoryIndex = categorySortIndex(for: first.category)
+        let secondCategoryIndex = categorySortIndex(for: second.category)
+        if firstCategoryIndex != secondCategoryIndex {
+            return firstCategoryIndex < secondCategoryIndex
+        }
+
+        return first.name.localizedCaseInsensitiveCompare(second.name) == .orderedAscending
+    }
+
+    private func categorySortIndex(for category: IngredientCategory) -> Int {
+        IngredientCategory.allCases.firstIndex(where: { $0 == category }) ?? Int.max
     }
 
     func addIngredient(
@@ -47,7 +112,8 @@ final class StorageViewModel: ObservableObject {
         amount: Double,
         unit: UnitType,
         iconName: String? = nil,
-        imageData: Data? = nil
+        imageData: Data? = nil,
+        expiryDate: Date? = nil
     ) {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty, amount > 0 else { return }
@@ -63,6 +129,9 @@ final class StorageViewModel: ObservableObject {
             if let imageData {
                 ingredients[index].imageData = imageData
             }
+            if let expiryDate {
+                ingredients[index].expiryDate = expiryDate
+            }
         } else {
             let newIngredient = Ingredient(
                 name: cleanName,
@@ -70,12 +139,91 @@ final class StorageViewModel: ObservableObject {
                 amount: amount,
                 unit: unit,
                 iconName: iconName,
-                imageData: imageData
+                imageData: imageData,
+                expiryDate: expiryDate
             )
             ingredients.append(newIngredient)
         }
 
         save()
+    }
+
+    @discardableResult
+    func addIngredientRecord(
+        name: String,
+        category: IngredientCategory,
+        amount: Double,
+        unit: UnitType,
+        iconName: String? = nil,
+        imageData: Data? = nil,
+        expiryDate: Date? = nil
+    ) -> Ingredient? {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty, amount > 0 else { return nil }
+
+        let newIngredient = Ingredient(
+            name: cleanName,
+            category: category,
+            amount: amount,
+            unit: unit,
+            iconName: iconName,
+            imageData: imageData,
+            expiryDate: expiryDate
+        )
+        ingredients.append(newIngredient)
+        save()
+        return newIngredient
+    }
+
+    func matchingPurchaseRecords(for ingredient: Ingredient) -> [Ingredient] {
+        ingredients
+            .filter {
+                $0.amount > 0 &&
+                $0.category == ingredient.category &&
+                $0.unit == ingredient.unit &&
+                $0.name.localizedCaseInsensitiveCompare(ingredient.name) == .orderedSame
+            }
+    }
+
+    func updateIngredientRecord(
+        id: UUID,
+        name: String,
+        amount: Double,
+        unit: UnitType,
+        expiryDate: Date?
+    ) {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty,
+              amount >= 0,
+              let index = ingredients.firstIndex(where: { $0.id == id }) else { return }
+        if amount == 0 {
+            ingredients.remove(at: index)
+            save()
+            return
+        }
+
+        ingredients[index].name = cleanName
+        ingredients[index].amount = amount
+        ingredients[index].unit = unit
+        ingredients[index].expiryDate = expiryDate
+        save()
+    }
+
+    private func aggregateKey(for ingredient: Ingredient) -> String {
+        [
+            ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            ingredient.category.rawValue,
+            ingredient.unit.rawValue
+        ].joined(separator: "|")
+    }
+
+    private func earliestRecord(in records: [Ingredient]) -> Ingredient? {
+        records
+            .filter { $0.amount > 0 && $0.expiryDate != nil }
+            .min {
+                guard let firstDate = $0.expiryDate, let secondDate = $1.expiryDate else { return false }
+                return firstDate < secondDate
+            }
     }
 
     func increase(_ ingredient: Ingredient) {
@@ -149,7 +297,7 @@ final class StorageViewModel: ObservableObject {
                 category: category,
                 amount: parsedAmount.amount,
                 unit: parsedAmount.unit,
-                iconName: category.categoryIcon
+                iconName: category.foodIconAssetName
             )
         }
 
@@ -215,16 +363,17 @@ final class StorageViewModel: ObservableObject {
     }
 
     private func loadSampleData() {
+        let calendar = Calendar.current
         ingredients = [
-            Ingredient(name: "Lamb", category: .meat, amount: 1.6, unit: .kg),
-            Ingredient(name: "Pork", category: .meat, amount: 1.6, unit: .kg),
-            Ingredient(name: "Chicken", category: .meat, amount: 1.6, unit: .kg),
-            Ingredient(name: "Beef", category: .meat, amount: 1.6, unit: .kg),
-            Ingredient(name: "Pepper", category: .condiment, amount: 150, unit: .g),
-            Ingredient(name: "Soy Sauce", category: .condiment, amount: 1.5, unit: .liter),
-            Ingredient(name: "Coriander", category: .veg, amount: 500, unit: .g),
-            Ingredient(name: "Shrimp", category: .seafood, amount: 500, unit: .g),
-            Ingredient(name: "Milk", category: .drink, amount: 2, unit: .liter)
+            Ingredient(name: "Lamb", category: .meat, amount: 1.6, unit: .kg, expiryDate: calendar.date(byAdding: .day, value: 3, to: Date())),
+            Ingredient(name: "Pork", category: .meat, amount: 1.6, unit: .kg, expiryDate: calendar.date(byAdding: .day, value: 1, to: Date())),
+            Ingredient(name: "Chicken", category: .meat, amount: 1.6, unit: .kg, expiryDate: calendar.date(byAdding: .day, value: 4, to: Date())),
+            Ingredient(name: "Beef", category: .meat, amount: 1.6, unit: .kg, expiryDate: calendar.date(byAdding: .day, value: -1, to: Date())),
+            Ingredient(name: "Pepper", category: .condiment, amount: 150, unit: .g, expiryDate: calendar.date(byAdding: .day, value: 30, to: Date())),
+            Ingredient(name: "Soy Sauce", category: .condiment, amount: 1.5, unit: .liter, expiryDate: calendar.date(byAdding: .day, value: 60, to: Date())),
+            Ingredient(name: "Coriander", category: .veg, amount: 500, unit: .g, expiryDate: calendar.date(byAdding: .day, value: 2, to: Date())),
+            Ingredient(name: "Shrimp", category: .seafood, amount: 500, unit: .g, expiryDate: calendar.date(byAdding: .day, value: 1, to: Date())),
+            Ingredient(name: "Milk", category: .drink, amount: 2, unit: .liter, expiryDate: calendar.date(byAdding: .day, value: 6, to: Date()))
         ]
         save()
     }

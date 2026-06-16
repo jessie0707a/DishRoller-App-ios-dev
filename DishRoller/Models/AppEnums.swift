@@ -25,6 +25,21 @@ enum IngredientCategory: String, CaseIterable, Codable, Identifiable {
         case .condiment: "flame"
         }
     }
+
+    var foodIconAssetName: String {
+        switch self {
+        case .meat:
+            "food-category-meat"
+        case .veg:
+            "food-category-veg"
+        case .seafood:
+            "food-category-seafood"
+        case .drink:
+            "food-category-drink"
+        case .condiment:
+            "food-category-condiment"
+        }
+    }
 }
 
 enum UnitType: String, CaseIterable, Codable, Identifiable {
