@@ -126,7 +126,7 @@ struct StorageView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Add food item")
         .padding(.trailing, 22)
-        .padding(.bottom, 18)
+        .padding(.bottom, 104)
     }
 
     private var header: some View {
@@ -1056,14 +1056,13 @@ private func expiryEditor(
         DatePicker("", selection: expiryDate, displayedComponents: .date)
             .labelsHidden()
             .datePickerStyle(.compact)
-            .frame(maxWidth: .infinity)
             .frame(height: 44)
-            .editorInputStyle(height: 44, isActive: isActive)
+            .editorInputStyle(maxWidth: 224, height: 44, isActive: isActive)
             .simultaneousGesture(TapGesture().onEnded {
                 onSelect?()
             })
     }
-    .frame(maxWidth: 294, alignment: .leading)
+    .frame(maxWidth: 224, alignment: .leading)
 }
 
 private func step(for unit: UnitType) -> Double {

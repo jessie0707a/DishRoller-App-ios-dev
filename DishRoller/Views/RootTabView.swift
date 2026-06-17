@@ -17,21 +17,9 @@ struct RootTabView: View {
                 SplashView()
                     .transition(.opacity)
             } else {
-                VStack(spacing: 0) {
-                    ZStack {
-                        switch appVM.selectedTab {
-                        case 0:
-                            StorageView()
-                        case 1:
-                            DishRollerView()
-                        case 2:
-                            MenuView()
-                        default:
-                            StorageView()
-                        }
-                    }
-
-                    BottomTabBar(selectedTab: $appVM.selectedTab)
+                ZStack(alignment: .bottom) {
+                    selectedTabView
+                    bottomNavigationOverlay
                 }
                 .ignoresSafeArea(.keyboard)
                 .transition(.opacity)
@@ -43,6 +31,43 @@ struct RootTabView: View {
                     showSplash = false
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var selectedTabView: some View {
+        switch appVM.selectedTab {
+        case 0:
+            StorageView()
+        case 1:
+            DishRollerView()
+        case 2:
+            MenuView()
+        default:
+            StorageView()
+        }
+    }
+
+    private var bottomNavigationOverlay: some View {
+        ZStack(alignment: .bottom) {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: .black.opacity(0.55), location: 0.48),
+                            .init(color: .black, location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(height: 130)
+                .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(false)
+
+            BottomTabBar(selectedTab: $appVM.selectedTab)
         }
     }
 }
