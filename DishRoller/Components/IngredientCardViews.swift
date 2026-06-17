@@ -13,38 +13,38 @@ struct IngredientCardView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            VStack(spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Text(ingredient.category.rawValue)
-                        .font(.system(size: 15, weight: .black))
+                        .font(.system(size: 13, weight: .black))
                         .fontWeight(.black)
                         .foregroundColor(.black)
                         .lineLimit(1)
                         .minimumScaleFactor(0.55)
                         .allowsTightening(true)
-                        .padding(.horizontal, 10)
-                        .frame(minWidth: 74, maxWidth: 96)
-                        .frame(height: 34)
+                        .padding(.horizontal, 8)
+                        .frame(minWidth: 66, maxWidth: 88)
+                        .frame(height: 30)
                         .background(isExpired ? Color(.systemGray4) : Color.yellow)
                         .clipShape(Capsule())
 
                     Spacer(minLength: 2)
 
                     Text(expiryLabel)
-                        .font(.system(size: 15, weight: .black))
+                        .font(.system(size: 14, weight: .black))
                         .fontWeight(.black)
                         .foregroundColor(expiryTextColor)
                         .lineLimit(1)
                         .minimumScaleFactor(0.55)
                         .allowsTightening(true)
                         .multilineTextAlignment(.trailing)
-                        .frame(minWidth: 58, maxWidth: 86, alignment: .trailing)
+                        .frame(minWidth: 54, maxWidth: 82, alignment: .trailing)
                 }
 
                 itemImage
 
                 Text(ingredient.name)
-                    .font(.system(size: 22, weight: .black))
+                    .font(.system(size: 20, weight: .black))
                     .foregroundColor(.black)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -53,36 +53,36 @@ struct IngredientCardView: View {
                     .frame(maxWidth: .infinity)
 
                 Text("\(formatAmount(ingredient.amount)) \(ingredient.unit.rawValue)")
-                    .font(.system(size: 21, weight: .black))
+                    .font(.system(size: 19, weight: .black))
                     .foregroundColor(.black)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                     .allowsTightening(true)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 2)
             }
-            .padding(.top, 16)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 26)
+            .padding(.top, 12)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 22)
             .frame(maxWidth: .infinity)
 
             Button(action: onEdit) {
                 ZStack {
                     Circle()
                         .fill(Color.yellow)
-                        .frame(width: 66, height: 66)
+                        .frame(width: 56, height: 56)
 
                     Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .black))
+                        .font(.system(size: 20, weight: .black))
                         .foregroundColor(.black)
-                        .offset(x: -8, y: -8)
+                        .offset(x: -7, y: -7)
                 }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Edit quantity")
-            .offset(x: 20, y: 20)
+            .offset(x: 17, y: 17)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 278)
+        .frame(height: 238)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 22))
         .shadow(color: .black.opacity(0.06), radius: 14, y: 8)
@@ -92,20 +92,20 @@ struct IngredientCardView: View {
         ZStack {
             Circle()
                 .fill(isExpired ? Color(.systemGray4) : categoryTint.opacity(0.18))
-                .frame(width: 108, height: 108)
+                .frame(width: 90, height: 90)
 
             if let imageData = ingredient.imageData,
                let image = UIImage(data: imageData) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 108, height: 108)
+                    .frame(width: 90, height: 90)
                     .clipShape(Circle())
             } else {
                 Image(cardIconAssetName)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 96, height: 96)
+                    .frame(width: 78, height: 78)
             }
         }
         .frame(maxWidth: .infinity)

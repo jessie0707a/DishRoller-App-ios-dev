@@ -27,12 +27,35 @@ final class DishRollerViewModel: ObservableObject {
             return
         }
 
-        let available = ingredients.filter(isAvailableForSelection)
+        let available = selectableIngredients(from: ingredients)
         guard let random = available.randomElement() else {
             errorMessage = "No available ingredients match the current selection."
             return
         }
         addSelection(random)
+    }
+
+    func selectableIngredients(
+        from ingredients: [Ingredient],
+        matching categories: Set<IngredientCategory>? = nil
+    ) -> [Ingredient] {
+        var seenNames: Set<String> = []
+
+        return ingredients
+            .sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+            .filter { ingredient in
+                guard ingredient.amount > 0 else { return false }
+                if let categories, !categories.contains(ingredient.category) { return false }
+                return isAvailableForSelection(ingredient)
+            }
+            .filter { ingredient in
+                let key = selectionKey(for: ingredient)
+                guard !seenNames.contains(key) else { return false }
+                seenNames.insert(key)
+                return true
+            }
     }
 
     func addSelection(_ ingredient: Ingredient) {
@@ -44,8 +67,8 @@ final class DishRollerViewModel: ObservableObject {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty else { return false }
 
-        guard let matchedIngredient = ingredients.first(where: {
-            $0.amount > 0 && IngredientNameMatcher.matches(storageName: $0.name, recipeName: cleanName)
+        guard let matchedIngredient = selectableIngredients(from: ingredients).first(where: {
+            IngredientNameMatcher.matches(storageName: $0.name, recipeName: cleanName)
         }) else {
             return false
         }
@@ -66,9 +89,12 @@ final class DishRollerViewModel: ObservableObject {
         guard selectedResults.count < 5 else { return false }
         guard ingredient.amount > 0 else { return false }
 
-        return !selectedResults.contains {
-            $0.name.lowercased() == ingredient.name.lowercased()
-        }
+        let key = selectionKey(for: ingredient)
+        return !selectedResults.contains { selectionKey(for: $0) == key }
+    }
+
+    private func selectionKey(for ingredient: Ingredient) -> String {
+        ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     func generateRecipe(avoidancePrompt: String) async -> Recipe? {

@@ -489,6 +489,7 @@ struct DishRollerView: View {
                     avoidancePrompt: appVM.avoidanceVM.selectedAvoidancePrompt
                 ) {
                     appVM.openMenu(with: recipe, context: context)
+                    resetRound()
                 }
             }
         } label: {
@@ -673,12 +674,7 @@ struct DishRollerView: View {
     }
 
     private var wheelIngredients: [Ingredient] {
-        appVM.storageVM.ingredients.sorted {
-            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-        }
-        .filter {
-            $0.amount > 0 && selectedComboCategories.contains($0.category)
-        }
+        vm.selectableIngredients(from: appVM.storageVM.ingredients, matching: selectedComboCategories)
     }
 
     private var comboSelectionTitle: String {
@@ -712,18 +708,35 @@ struct DishRollerView: View {
                     let wheelSize = geometry.size.width * 1.4
 
                     ZStack {
+                        Ellipse()
+                            .fill(Color.black.opacity(0.16))
+                            .frame(width: wheelSize * 0.72, height: 38)
+                            .blur(radius: 14)
+                            .offset(y: 284)
+
                         turntableWheel
                             .rotationEffect(.degrees(wheelRotation))
                             .frame(width: wheelSize, height: wheelSize)
-                            .offset(x:0, y:125)
-                            .frame(width:370,height:300)
-                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .offset(x: 0, y: 122)
+                            .frame(width: 370, height: 304)
+                            .clipShape(RoundedRectangle(cornerRadius: 26))
+                            .shadow(color: .black.opacity(0.2), radius: 18, y: 10)
 
                         VStack(spacing: 0) {
                             Triangle()
-                                .fill(Color.black)
-                                .frame(width: 16, height: 100)
-                                .shadow(color: .black.opacity(0.18), radius: 8, y: 1)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.black, Color.black.opacity(0.78)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: 20, height: 106)
+                                .overlay(
+                                    Triangle()
+                                        .stroke(Color.yellow, lineWidth: 2)
+                                )
+                                .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
 
                             Button {
                                 toggleWheelSpin()
@@ -733,18 +746,34 @@ struct DishRollerView: View {
                                     .fontWeight(.black)
                                     .foregroundColor(isSpinning ? .yellow : .black)
                                     .frame(width: 102, height: 102)
-                                    .background(isSpinning ? Color.black : Color.yellow)
+                                    .background(
+                                        RadialGradient(
+                                            colors: isSpinning
+                                            ? [Color.black.opacity(0.82), .black]
+                                            : [Color.yellow.opacity(0.92), .yellow],
+                                            center: .topLeading,
+                                            startRadius: 12,
+                                            endRadius: 82
+                                        )
+                                    )
                                     .clipShape(Circle())
                                     .overlay(
                                         Circle()
                                             .stroke(Color.black, lineWidth: 5)
                                     )
-                                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.55), lineWidth: 2)
+                                            .padding(8)
+                                    )
+                                    .scaleEffect(isSpinning ? 1.05 : 1)
+                                    .shadow(color: .black.opacity(0.24), radius: 14, y: 7)
                             }
                             .buttonStyle(.plain)
+                            .animation(.spring(response: 0.24, dampingFraction: 0.7), value: isSpinning)
                             .offset(y: -10)
                         }
-                        .offset(x:0,y:50)
+                        .offset(x: 0, y: 48)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .clipped()
@@ -762,11 +791,32 @@ struct DishRollerView: View {
 
             ZStack {
                 Circle()
-                    .fill(Color.white)
+                    .fill(
+                        RadialGradient(
+                            colors: [.white, Color(.systemGray6), Color(.systemGray4)],
+                            center: .center,
+                            startRadius: size * 0.08,
+                            endRadius: size * 0.58
+                        )
+                    )
 
                 Circle()
-                    .stroke(Color.yellow, lineWidth: 30)
-                    .padding(6)
+                    .stroke(Color.black, lineWidth: 9)
+                    .padding(2)
+
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            colors: [.yellow, Color(red: 1.0, green: 0.82, blue: 0.05), .yellow, .white, .yellow],
+                            center: .center
+                        ),
+                        lineWidth: 26
+                    )
+                    .padding(10)
+
+                Circle()
+                    .stroke(Color.black, lineWidth: 6)
+                    .padding(24)
 
                 ForEach(Array(wheelIngredients.enumerated()), id: \.element.id) { index, ingredient in
                     let startAngle = -90.0 - (segmentAngle / 2) + (Double(index) * segmentAngle)
@@ -778,14 +828,23 @@ struct DishRollerView: View {
                         endAngle: .degrees(endAngle),
                         innerRadiusRatio: 0.55
                     )
-                    .fill(index.isMultiple(of: 2) ? Color(.systemGray6) : Color(.systemGray5))
+                    .fill(segmentFill(for: index))
                     .overlay(
                         WheelSegmentShape(
                             startAngle: .degrees(startAngle),
                             endAngle: .degrees(endAngle),
                             innerRadiusRatio: 0.55
                         )
-                        .stroke(Color.black, lineWidth: 8)
+                        .stroke(Color.black, lineWidth: 6)
+                    )
+                    .overlay(
+                        WheelSegmentShape(
+                            startAngle: .degrees(startAngle),
+                            endAngle: .degrees(endAngle),
+                            innerRadiusRatio: 0.55
+                        )
+                        .stroke(Color.white.opacity(0.38), lineWidth: 1.5)
+                        .padding(5)
                     )
 
                     WheelSegmentLabel(ingredient: ingredient)
@@ -798,15 +857,41 @@ struct DishRollerView: View {
                 }
 
                 Circle()
-                    .fill(Color.white)
+                    .fill(
+                        RadialGradient(
+                            colors: [.white, Color(.systemGray6)],
+                            center: .topLeading,
+                            startRadius: size * 0.08,
+                            endRadius: size * 0.25
+                        )
+                    )
                     .padding(size * 0.34)
+                    .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
 
                 Circle()
-                    .stroke(Color.yellow, lineWidth: 6)
+                    .stroke(Color.black, lineWidth: 5)
+                    .padding(size * 0.25)
+
+                Circle()
+                    .stroke(Color.yellow, lineWidth: 8)
                     .padding(size * 0.235)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
+    }
+
+    private func segmentFill(for index: Int) -> AnyShapeStyle {
+        let colors: [Color] = index.isMultiple(of: 2)
+        ? [Color.white, Color(.systemGray6), Color(red: 0.93, green: 0.94, blue: 0.97)]
+        : [Color(red: 0.91, green: 0.92, blue: 0.96), Color(.systemGray5), Color.white]
+
+        return AnyShapeStyle(
+            LinearGradient(
+                colors: colors,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
     }
 
     private func toggleWheelSpin() {
@@ -819,6 +904,10 @@ struct DishRollerView: View {
 
             if let selectedIngredient = currentWheelSelection {
                 vm.addSelection(selectedIngredient)
+            }
+
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                activeControlPanel = .results
             }
         } else if remainingSpins > 0 {
             isSpinning = true
@@ -1044,14 +1133,28 @@ struct WheelSegmentLabel: View {
     let ingredient: Ingredient
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 7) {
             Text(ingredient.category.rawValue)
                 .font(.caption2)
                 .fontWeight(.black)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Color.yellow)
+                .foregroundColor(.black)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    LinearGradient(
+                        colors: [.yellow, Color(red: 1.0, green: 0.84, blue: 0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.black, lineWidth: 1.4)
+                )
+                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
 
             Text(ingredient.name)
                 .font(.headline)
@@ -1059,6 +1162,10 @@ struct WheelSegmentLabel: View {
                 .foregroundColor(.black)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.white.opacity(0.58))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 }
