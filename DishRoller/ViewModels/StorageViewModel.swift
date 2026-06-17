@@ -62,7 +62,6 @@ final class StorageViewModel: ObservableObject {
                 return nil
             }
 
-            let earliestExpiryRecord = earliestRecord(in: records)
             let totalAmount = records.reduce(0) { $0 + $1.amount }
             return Ingredient(
                 id: displayRecord.id,
@@ -72,7 +71,7 @@ final class StorageViewModel: ObservableObject {
                 unit: displayRecord.unit,
                 iconName: displayRecord.iconName ?? displayRecord.category.foodIconAssetName,
                 imageData: displayRecord.imageData,
-                expiryDate: earliestExpiryRecord?.expiryDate
+                expiryDate: earliestExpiryDate(forIngredientNamed: displayRecord.name)
             )
         }
     }
@@ -211,7 +210,7 @@ final class StorageViewModel: ObservableObject {
 
     private func aggregateKey(for ingredient: Ingredient) -> String {
         [
-            ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            normalizedIngredientName(ingredient.name),
             ingredient.category.rawValue,
             ingredient.unit.rawValue
         ].joined(separator: "|")
@@ -224,6 +223,18 @@ final class StorageViewModel: ObservableObject {
                 guard let firstDate = $0.expiryDate, let secondDate = $1.expiryDate else { return false }
                 return firstDate < secondDate
             }
+    }
+
+    private func earliestExpiryDate(forIngredientNamed name: String) -> Date? {
+        let normalizedName = normalizedIngredientName(name)
+        return ingredients
+            .filter { $0.amount > 0 && normalizedIngredientName($0.name) == normalizedName }
+            .compactMap(\.expiryDate)
+            .min()
+    }
+
+    private func normalizedIngredientName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     func increase(_ ingredient: Ingredient) {
