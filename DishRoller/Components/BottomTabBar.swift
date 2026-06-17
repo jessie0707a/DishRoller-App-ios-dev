@@ -14,7 +14,7 @@ struct BottomTabBar: View {
         HStack {
             tabButton(index: 0, title: "Storage", icon: "shippingbox")
             tabButton(index: 1, title: "DishRoll", icon: "record.circle")
-            tabButton(index: 2, title: "Menu", icon: "book")
+            tabButton(index: 2, title: "Recipes", icon: "book")
         }
         .padding(8)
         .background(

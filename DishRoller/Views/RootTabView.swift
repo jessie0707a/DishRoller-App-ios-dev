@@ -19,10 +19,13 @@ struct RootTabView: View {
             } else {
                 ZStack(alignment: .bottom) {
                     selectedTabView
-                    bottomNavigationOverlay
+                    if !isRecipeOverlayPresented {
+                        bottomNavigationOverlay
+                    }
                 }
                 .ignoresSafeArea(.keyboard)
                 .transition(.opacity)
+                .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isRecipeOverlayPresented)
             }
         }
         .onAppear {
@@ -46,6 +49,10 @@ struct RootTabView: View {
         default:
             StorageView()
         }
+    }
+
+    private var isRecipeOverlayPresented: Bool {
+        appVM.selectedTab == 2 && appVM.currentRecipe != nil
     }
 
     private var bottomNavigationOverlay: some View {

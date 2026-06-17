@@ -16,25 +16,57 @@ struct RecipeGenerationContext {
     var customPreferences: String
 }
 
+struct DailyGeneratedRecipe: Identifiable, Codable, Equatable {
+    let id: UUID
+    var recipe: Recipe
+    var generatedAt: Date
+
+    init(recipe: Recipe, generatedAt: Date = Date()) {
+        self.id = recipe.id
+        self.recipe = recipe
+        self.generatedAt = generatedAt
+    }
+}
+
 final class AppViewModel: ObservableObject {
     @Published var selectedTab: Int = 0
     @Published var currentRecipe: Recipe?
     @Published var currentRecipeContext: RecipeGenerationContext?
+    @Published private var todayMenuRecords: [DailyGeneratedRecipe] = []
 
     @Published var storageVM = StorageViewModel()
     @Published var savedRecipesVM = SavedRecipesViewModel()
     @Published var avoidanceVM = AvoidancePreferencesViewModel()
 
+    var todayMenuRecipes: [Recipe] {
+        todayMenuRecords.map { syncedRecipeState(for: $0.recipe) }
+    }
+
+    private let todayMenuKey = "dishroller.todayGeneratedMenus"
     private var cancellables: Set<AnyCancellable> = []
 
     init() {
+        loadTodayMenus()
         bindChildViewModels()
     }
 
     func openMenu(with recipe: Recipe, context: RecipeGenerationContext? = nil) {
+        let syncedRecipe = syncedRecipeState(for: recipe)
+        addTodayMenuRecipe(syncedRecipe)
+        currentRecipe = syncedRecipe
+        currentRecipeContext = context
+        selectedTab = 2
+    }
+
+    func presentRecipe(_ recipe: Recipe, context: RecipeGenerationContext? = nil) {
         currentRecipe = syncedRecipeState(for: recipe)
         currentRecipeContext = context
         selectedTab = 2
+    }
+
+    func dismissCurrentRecipe() {
+        currentRecipe = nil
+        currentRecipeContext = nil
     }
 
     func consumeRecipeIngredients(for recipe: Recipe) {
@@ -53,8 +85,11 @@ final class AppViewModel: ObservableObject {
             savedRecipesVM.saveRecipe(recipe)
         }
 
+        let isSaved = savedRecipesVM.isSaved(recipe)
+        syncTodayMenuSavedState(for: recipe.id, isSaved: isSaved)
+
         guard var updatedCurrentRecipe = currentRecipe, updatedCurrentRecipe.id == recipe.id else { return }
-        updatedCurrentRecipe.isSaved = savedRecipesVM.isSaved(recipe)
+        updatedCurrentRecipe.isSaved = isSaved
         currentRecipe = updatedCurrentRecipe
     }
 
@@ -76,6 +111,48 @@ final class AppViewModel: ObservableObject {
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
+    }
+
+    private func addTodayMenuRecipe(_ recipe: Recipe) {
+        pruneExpiredTodayMenus()
+        todayMenuRecords.removeAll { $0.id == recipe.id }
+        todayMenuRecords.insert(DailyGeneratedRecipe(recipe: recipe), at: 0)
+        persistTodayMenus()
+    }
+
+    private func syncTodayMenuSavedState(for recipeID: UUID, isSaved: Bool) {
+        guard let index = todayMenuRecords.firstIndex(where: { $0.id == recipeID }) else { return }
+        todayMenuRecords[index].recipe.isSaved = isSaved
+        persistTodayMenus()
+    }
+
+    private func loadTodayMenus() {
+        guard let data = UserDefaults.standard.data(forKey: todayMenuKey),
+              let records = try? JSONDecoder().decode([DailyGeneratedRecipe].self, from: data)
+        else {
+            todayMenuRecords = []
+            return
+        }
+
+        todayMenuRecords = records
+            .filter { Calendar.current.isDateInToday($0.generatedAt) }
+            .map { record in
+                DailyGeneratedRecipe(
+                    recipe: syncedRecipeState(for: record.recipe),
+                    generatedAt: record.generatedAt
+                )
+            }
+        persistTodayMenus()
+    }
+
+    private func pruneExpiredTodayMenus() {
+        todayMenuRecords = todayMenuRecords.filter { Calendar.current.isDateInToday($0.generatedAt) }
+        persistTodayMenus()
+    }
+
+    private func persistTodayMenus() {
+        guard let data = try? JSONEncoder().encode(todayMenuRecords) else { return }
+        UserDefaults.standard.set(data, forKey: todayMenuKey)
     }
 
     private func syncedRecipeState(for recipe: Recipe) -> Recipe {
@@ -116,7 +193,7 @@ extension AppViewModel {
         )
 
         appVM.savedRecipesVM.savedRecipes = [sampleRecipe]
-        appVM.currentRecipe = sampleRecipe
+        appVM.openMenu(with: sampleRecipe)
 
         return appVM
     }
