@@ -12,7 +12,7 @@ struct StorageView: View {
     @EnvironmentObject private var appVM: AppViewModel
 
     @State private var showScannerPlaceholder = false
-    @State private var showAddFoodSheet = false
+    @State private var addFoodSheetContext: AddFoodSheetContext?
     @State private var editorContext: IngredientEditorContext?
     @State private var pendingDeleteIngredient: Ingredient?
 
@@ -59,8 +59,8 @@ struct StorageView: View {
                 addFoodButton
             }
         }
-        .sheet(isPresented: $showAddFoodSheet) {
-            AddFoodItemSheet(storageVM: appVM.storageVM)
+        .sheet(item: $addFoodSheetContext) { context in
+            AddFoodItemSheet(storageVM: appVM.storageVM, initialFoodName: context.initialName)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -109,7 +109,7 @@ struct StorageView: View {
 
     private var addFoodButton: some View {
         Button {
-            showAddFoodSheet = true
+            openAddFoodSheet()
         } label: {
             Image(systemName: "plus")
                 .font(.title.weight(.black))
@@ -246,7 +246,9 @@ struct StorageView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        let searchName = searchedFoodName
+
+        return VStack(spacing: 12) {
             Image(systemName: "tray")
                 .font(.system(size: 38, weight: .semibold))
                 .foregroundColor(.gray)
@@ -259,11 +261,37 @@ struct StorageView: View {
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundColor(.gray)
+
+            if let searchName {
+                Button {
+                    openAddFoodSheet(initialName: searchName)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus")
+                            .font(.subheadline.weight(.black))
+                        Text("Add Item")
+                            .font(.subheadline.weight(.black))
+                    }
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 18)
+                    .frame(height: 42)
+                    .background(Color.yellow)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add \(searchName)")
+                .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 36)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var searchedFoodName: String? {
+        let cleanSearch = appVM.storageVM.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleanSearch.isEmpty ? nil : cleanSearch
     }
 
     private var storageBackground: Color {
@@ -282,6 +310,15 @@ struct StorageView: View {
             editorContext = nil
         }
     }
+
+    private func openAddFoodSheet(initialName: String = "") {
+        addFoodSheetContext = AddFoodSheetContext(initialName: initialName)
+    }
+}
+
+private struct AddFoodSheetContext: Identifiable {
+    let id = UUID()
+    let initialName: String
 }
 
 private struct IngredientEditorContext: Identifiable {
@@ -1142,6 +1179,11 @@ private struct AddFoodItemSheet: View {
         IngredientCategory.condiment.foodIconAssetName,
         IngredientCategory.drink.foodIconAssetName
     ]
+
+    init(storageVM: StorageViewModel, initialFoodName: String = "") {
+        self.storageVM = storageVM
+        _foodName = State(initialValue: initialFoodName)
+    }
 
     var body: some View {
         NavigationStack {
