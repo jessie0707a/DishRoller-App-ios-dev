@@ -22,9 +22,16 @@ struct ShoppingListItem: Identifiable, Codable, Equatable {
     var ingredientName: String
     var sources: [ShoppingListSource]
     var addedAt: Date
+    var isCompleted: Bool
+    var generatedStorageRecordIDs: [UUID]
+    var editedAmountText: String?
 
     var amountText: String {
-        sources
+        if let editedAmountText {
+            return editedAmountText
+        }
+
+        return sources
             .map { $0.amountText.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " + ")
@@ -44,24 +51,36 @@ struct ShoppingListItem: Identifiable, Codable, Equatable {
         ingredientName: String,
         amountText: String,
         recipeName: String,
-        addedAt: Date = Date()
+        addedAt: Date = Date(),
+        isCompleted: Bool = false,
+        generatedStorageRecordIDs: [UUID] = [],
+        editedAmountText: String? = nil
     ) {
         self.id = id
         self.ingredientName = ingredientName
         self.sources = [ShoppingListSource(amountText: amountText, recipeName: recipeName)]
         self.addedAt = addedAt
+        self.isCompleted = isCompleted
+        self.generatedStorageRecordIDs = generatedStorageRecordIDs
+        self.editedAmountText = editedAmountText
     }
 
     init(
         id: UUID = UUID(),
         ingredientName: String,
         sources: [ShoppingListSource],
-        addedAt: Date = Date()
+        addedAt: Date = Date(),
+        isCompleted: Bool = false,
+        generatedStorageRecordIDs: [UUID] = [],
+        editedAmountText: String? = nil
     ) {
         self.id = id
         self.ingredientName = ingredientName
         self.sources = sources
         self.addedAt = addedAt
+        self.isCompleted = isCompleted
+        self.generatedStorageRecordIDs = generatedStorageRecordIDs
+        self.editedAmountText = editedAmountText
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -71,6 +90,9 @@ struct ShoppingListItem: Identifiable, Codable, Equatable {
         case amountText
         case recipeName
         case addedAt
+        case isCompleted
+        case generatedStorageRecordIDs
+        case editedAmountText
     }
 
     init(from decoder: Decoder) throws {
@@ -78,6 +100,12 @@ struct ShoppingListItem: Identifiable, Codable, Equatable {
         id = try container.decode(UUID.self, forKey: .id)
         ingredientName = try container.decode(String.self, forKey: .ingredientName)
         addedAt = try container.decodeIfPresent(Date.self, forKey: .addedAt) ?? Date()
+        isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
+        generatedStorageRecordIDs = try container.decodeIfPresent(
+            [UUID].self,
+            forKey: .generatedStorageRecordIDs
+        ) ?? []
+        editedAmountText = try container.decodeIfPresent(String.self, forKey: .editedAmountText)
 
         if let decodedSources = try container.decodeIfPresent([ShoppingListSource].self, forKey: .sources) {
             sources = decodedSources
@@ -94,5 +122,8 @@ struct ShoppingListItem: Identifiable, Codable, Equatable {
         try container.encode(ingredientName, forKey: .ingredientName)
         try container.encode(sources, forKey: .sources)
         try container.encode(addedAt, forKey: .addedAt)
+        try container.encode(isCompleted, forKey: .isCompleted)
+        try container.encode(generatedStorageRecordIDs, forKey: .generatedStorageRecordIDs)
+        try container.encodeIfPresent(editedAmountText, forKey: .editedAmountText)
     }
 }

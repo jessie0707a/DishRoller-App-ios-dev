@@ -273,6 +273,7 @@ final class StorageViewModel: ObservableObject {
             IngredientNameMatcher.matches(storageName: $0.ingredientName, recipeName: cleanIngredientName)
         }) {
             shoppingListItems[existingIndex].sources.append(newSource)
+            shoppingListItems[existingIndex].editedAmountText = nil
         } else {
             shoppingListItems.append(
                 ShoppingListItem(
@@ -299,20 +300,81 @@ final class StorageViewModel: ObservableObject {
     }
 
     func completeShoppingListItem(_ item: ShoppingListItem) {
-        let category = categoryGuess(for: item.ingredientName)
+        guard let index = shoppingListItems.firstIndex(where: { $0.id == item.id }) else { return }
+        guard !shoppingListItems[index].isCompleted else { return }
 
-        for source in item.sources {
-            let parsedAmount = parseShoppingAmount(source.amountText)
-            addIngredient(
+        let category = shoppingCategory(for: item.ingredientName)
+        var generatedRecordIDs: [UUID] = []
+        let purchaseAmounts: [String]
+
+        if item.editedAmountText != nil {
+            purchaseAmounts = [item.amountText]
+        } else {
+            purchaseAmounts = item.sources.map(\.amountText)
+        }
+
+        for amountText in purchaseAmounts {
+            let parsedAmount = parseShoppingAmount(amountText)
+            if let record = addIngredientRecord(
                 name: item.ingredientName,
                 category: category,
                 amount: parsedAmount.amount,
                 unit: parsedAmount.unit,
                 iconName: category.foodIconAssetName
-            )
+            ) {
+                generatedRecordIDs.append(record.id)
+            }
         }
 
-        deleteShoppingListItem(item)
+        shoppingListItems[index].generatedStorageRecordIDs = generatedRecordIDs
+        shoppingListItems[index].isCompleted = true
+        saveShoppingListItems()
+    }
+
+    func updateShoppingListItemAmount(_ item: ShoppingListItem, amountText: String) {
+        guard let index = shoppingListItems.firstIndex(where: { $0.id == item.id }),
+              !shoppingListItems[index].isCompleted else {
+            return
+        }
+
+        shoppingListItems[index].editedAmountText = amountText
+        saveShoppingListItems()
+    }
+
+    func adjustShoppingListItemAmount(_ item: ShoppingListItem, direction: Int) {
+        guard direction != 0,
+              let index = shoppingListItems.firstIndex(where: { $0.id == item.id }),
+              !shoppingListItems[index].isCompleted else {
+            return
+        }
+
+        let currentAmount = parseShoppingAmount(shoppingListItems[index].amountText)
+        let increment = step(for: currentAmount.unit)
+        let adjustedAmount = max(increment, currentAmount.amount + (Double(direction) * increment))
+        let formattedAmount = adjustedAmount.truncatingRemainder(dividingBy: 1) == 0
+            ? String(Int(adjustedAmount))
+            : String(format: "%.1f", adjustedAmount)
+
+        shoppingListItems[index].editedAmountText = "\(formattedAmount) \(currentAmount.unit.rawValue)"
+        saveShoppingListItems()
+    }
+
+    func recoverShoppingListItem(_ item: ShoppingListItem) {
+        guard let index = shoppingListItems.firstIndex(where: { $0.id == item.id }) else { return }
+
+        let generatedIDs = Set(shoppingListItems[index].generatedStorageRecordIDs)
+        if !generatedIDs.isEmpty {
+            ingredients.removeAll { generatedIDs.contains($0.id) }
+            save()
+        }
+
+        shoppingListItems[index].generatedStorageRecordIDs = []
+        shoppingListItems[index].isCompleted = false
+        saveShoppingListItems()
+    }
+
+    func shoppingCategory(for ingredientName: String) -> IngredientCategory {
+        categoryGuess(for: ingredientName)
     }
 
     func deleteShoppingListItem(_ item: ShoppingListItem) {
