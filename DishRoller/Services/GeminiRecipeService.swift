@@ -11,12 +11,14 @@ final class GeminiRecipeService {
     private let session: URLSession
     private let apiKey: String
     private let model: String
+    private let imageModel: String
 
     init() {
         let config = GeminiConfig.load()
         self.session = .shared
         self.apiKey = config.resolvedAPIKey()
         self.model = config.model
+        self.imageModel = config.imageModel
     }
 
     func generateRecipe(
@@ -111,8 +113,16 @@ final class GeminiRecipeService {
             }
 
             let recipeDTO = try JSONDecoder().decode(RecipeDTO.self, from: jsonData)
+            let recipeID = UUID()
+            let imageFileName = await generateAndSaveDishImage(
+                recipeID: recipeID,
+                title: recipeDTO.title,
+                ingredients: recipeDTO.ingredients.map(\.name),
+                flavourTags: recipeDTO.flavourTags
+            )
 
             return Recipe(
+                id: recipeID,
                 title: recipeDTO.title,
                 estimatedTime: recipeDTO.estimatedTime,
                 flavourTags: recipeDTO.flavourTags.map(Self.normalizedFlavourTag),
@@ -121,7 +131,8 @@ final class GeminiRecipeService {
                 },
                 procedure: recipeDTO.procedure.map {
                     RecipeProcedureStep(emoji: $0.emoji, instruction: $0.instruction)
-                }
+                },
+                imageFileName: imageFileName
             )
         } catch {
             throw error
@@ -138,23 +149,133 @@ final class GeminiRecipeService {
 
         return trimmedTag
     }
+
+    private func generateAndSaveDishImage(
+        recipeID: UUID,
+        title: String,
+        ingredients: [String],
+        flavourTags: [String]
+    ) async -> String? {
+        let prompt = """
+        Use Google Image Search grounding to understand how this dish and cuisine should look, then create one realistic editorial food photograph for the recipe "\(title)".
+
+        Main ingredients: \(ingredients.joined(separator: ", "))
+        Style tags: \(flavourTags.joined(separator: ", "))
+
+        Show the completed dish clearly as the main subject. Use natural restaurant-quality lighting, a clean plate, realistic portions, accurate ingredients, and a slightly elevated camera angle. Landscape 4:3 composition. No people, hands, packaging, logos, watermarks, labels, borders, or text.
+        """
+
+        if let image = try? await requestDishImage(
+            prompt: prompt,
+            model: imageModel,
+            usesGoogleSearch: true
+        ) {
+            return RecipeImageStore.shared.save(
+                image.data,
+                recipeID: recipeID,
+                mimeType: image.mimeType
+            )
+        }
+
+        guard imageModel != "gemini-2.5-flash-image",
+              let image = try? await requestDishImage(
+                prompt: prompt,
+                model: "gemini-2.5-flash-image",
+                usesGoogleSearch: false
+              )
+        else {
+            return nil
+        }
+
+        return RecipeImageStore.shared.save(
+            image.data,
+            recipeID: recipeID,
+            mimeType: image.mimeType
+        )
+    }
+
+    private func requestDishImage(
+        prompt: String,
+        model: String,
+        usesGoogleSearch: Bool
+    ) async throws -> GeneratedDishImage {
+        guard let endpoint = URL(
+            string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent"
+        ) else {
+            throw GeminiRecipeServiceError.invalidConfiguration("Invalid Gemini image model configuration.")
+        }
+
+        var requestBody: [String: Any] = [
+            "contents": [
+                [
+                    "parts": [
+                        ["text": prompt]
+                    ]
+                ]
+            ],
+            "generationConfig": [
+                "responseModalities": ["TEXT", "IMAGE"]
+            ]
+        ]
+
+        if usesGoogleSearch {
+            requestBody["tools"] = [["google_search": [:]]]
+        }
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.addValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GeminiRecipeServiceError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let apiError = try? JSONDecoder().decode(GeminiErrorResponse.self, from: data)
+            throw GeminiRecipeServiceError.apiError(
+                apiError?.error.message ?? "Gemini image API returned status code \(httpResponse.statusCode)."
+            )
+        }
+
+        let decoded = try JSONDecoder().decode(GeminiGenerateContentResponse.self, from: data)
+        guard let inlineData = decoded.candidates
+            .flatMap(\.content.parts)
+            .compactMap(\.inlineData)
+            .first,
+              let imageData = Data(base64Encoded: inlineData.data)
+        else {
+            throw GeminiRecipeServiceError.invalidResponse
+        }
+
+        return GeneratedDishImage(data: imageData, mimeType: inlineData.mimeType)
+    }
 }
 
 private struct GeminiConfig {
     let apiKey: String
     let model: String
+    let imageModel: String
 
     static func load(bundle: Bundle = .main) -> GeminiConfig {
         guard
             let url = bundle.url(forResource: "Config", withExtension: "plist"),
             let values = NSDictionary(contentsOf: url) as? [String: Any]
         else {
-            return GeminiConfig(apiKey: "", model: "gemini-2.5-flash-lite")
+            return GeminiConfig(
+                apiKey: "",
+                model: "gemini-2.5-flash-lite",
+                imageModel: "gemini-3.1-flash-image"
+            )
         }
 
         let apiKey = values["GEMINI_API_KEY"] as? String ?? ""
         let model = values["GEMINI_MODEL"] as? String ?? "gemini-2.5-flash-lite"
-        return GeminiConfig(apiKey: apiKey, model: model)
+        let imageModel = values["GEMINI_IMAGE_MODEL"] as? String ?? "gemini-3.1-flash-image"
+        return GeminiConfig(apiKey: apiKey, model: model, imageModel: imageModel)
     }
 
     func resolvedAPIKey() -> String {
@@ -183,6 +304,17 @@ private enum GeminiRecipeServiceError: LocalizedError {
 
 private struct GeminiPart: Codable {
     let text: String?
+    let inlineData: GeminiInlineData?
+}
+
+private struct GeminiInlineData: Codable {
+    let mimeType: String
+    let data: String
+}
+
+private struct GeneratedDishImage {
+    let data: Data
+    let mimeType: String
 }
 
 private enum RecipeSchema {

@@ -18,6 +18,7 @@ struct RecipeIngredientRow: View {
     var showsStorageStatus = true
     var isInShoppingList = false
     var onAddToShoppingList: (() -> Void)? = nil
+    var onRemoveFromShoppingList: (() -> Void)? = nil
 
     @State private var hoveredBadge: BadgeID?
 
@@ -46,9 +47,13 @@ struct RecipeIngredientRow: View {
 
                 if showsStorageStatus && !exists {
                     Button {
-                        onAddToShoppingList?()
+                        if isInShoppingList {
+                            onRemoveFromShoppingList?()
+                        } else {
+                            onAddToShoppingList?()
+                        }
                     } label: {
-                        Image(systemName: isInShoppingList ? "cart.fill.badge.plus" : "cart.badge.plus")
+                        Image(systemName: isInShoppingList ? "cart.fill.badge.minus" : "cart.badge.plus")
                             .font(.caption.weight(.black))
                             .foregroundColor(isInShoppingList ? .white : .black)
                             .frame(width: 34, height: 34)
@@ -56,7 +61,11 @@ struct RecipeIngredientRow: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(isInShoppingList ? "Added \(ingredient.name) to shopping list" : "Add \(ingredient.name) to shopping list")
+                    .accessibilityLabel(
+                        isInShoppingList
+                            ? "Remove \(ingredient.name) from shopping list"
+                            : "Add \(ingredient.name) to shopping list"
+                    )
                 }
             }
             .fixedSize(horizontal: true, vertical: false)

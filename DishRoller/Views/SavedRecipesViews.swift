@@ -154,6 +154,9 @@ private struct SavedRecipeDetailView: View {
                                 isInShoppingList: appVM.storageVM.isInShoppingList(ingredient, recipeName: recipe.title),
                                 onAddToShoppingList: {
                                     appVM.storageVM.addShoppingListItem(from: ingredient, recipeName: recipe.title)
+                                },
+                                onRemoveFromShoppingList: {
+                                    appVM.storageVM.removeShoppingListItem(from: ingredient, recipeName: recipe.title)
                                 }
                             )
                         } else {

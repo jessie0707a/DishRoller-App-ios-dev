@@ -15,6 +15,7 @@ struct Recipe: Identifiable, Codable, Equatable {
     var ingredients: [RecipeIngredient]
     var procedure: [RecipeProcedureStep]
     var isSaved: Bool
+    var imageFileName: String?
 
     init(
         id: UUID = UUID(),
@@ -23,7 +24,8 @@ struct Recipe: Identifiable, Codable, Equatable {
         flavourTags: [String],
         ingredients: [RecipeIngredient],
         procedure: [String],
-        isSaved: Bool = false
+        isSaved: Bool = false,
+        imageFileName: String? = nil
     ) {
         self.init(
             id: id,
@@ -32,7 +34,8 @@ struct Recipe: Identifiable, Codable, Equatable {
             flavourTags: flavourTags,
             ingredients: ingredients,
             procedure: procedure.map { RecipeProcedureStep(instruction: $0) },
-            isSaved: isSaved
+            isSaved: isSaved,
+            imageFileName: imageFileName
         )
     }
 
@@ -43,7 +46,8 @@ struct Recipe: Identifiable, Codable, Equatable {
         flavourTags: [String],
         ingredients: [RecipeIngredient],
         procedure: [RecipeProcedureStep],
-        isSaved: Bool = false
+        isSaved: Bool = false,
+        imageFileName: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -52,6 +56,7 @@ struct Recipe: Identifiable, Codable, Equatable {
         self.ingredients = ingredients
         self.procedure = procedure
         self.isSaved = isSaved
+        self.imageFileName = imageFileName
     }
 }
 

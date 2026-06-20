@@ -259,6 +259,47 @@ final class StorageViewModel: ObservableObject {
         save()
     }
 
+    func consume(_ recipeIngredient: RecipeIngredient) {
+        let matchingIndices = ingredients.indices
+            .filter {
+                ingredients[$0].amount > 0 &&
+                IngredientNameMatcher.matches(
+                    storageName: ingredients[$0].name,
+                    recipeName: recipeIngredient.name
+                )
+            }
+            .sorted {
+                switch (ingredients[$0].expiryDate, ingredients[$1].expiryDate) {
+                case let (firstDate?, secondDate?):
+                    return firstDate < secondDate
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                case (nil, nil):
+                    return $0 < $1
+                }
+            }
+
+        guard let firstIndex = matchingIndices.first else { return }
+
+        let preferredUnit = ingredients[firstIndex].unit
+        var remainingAmount = consumptionAmount(
+            from: recipeIngredient.amount,
+            convertedTo: preferredUnit
+        )
+
+        for index in matchingIndices where remainingAmount > 0 {
+            guard ingredients[index].unit == preferredUnit else { continue }
+            let consumedAmount = min(ingredients[index].amount, remainingAmount)
+            ingredients[index].amount -= consumedAmount
+            remainingAmount -= consumedAmount
+        }
+
+        ingredients.removeAll { $0.amount <= 0 }
+        save()
+    }
+
     func addShoppingListItem(from recipeIngredient: RecipeIngredient, recipeName: String) {
         let cleanIngredientName = recipeIngredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanRecipeName = recipeName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -297,6 +338,34 @@ final class StorageViewModel: ObservableObject {
                 $0.amountText.localizedCaseInsensitiveCompare(normalizedAmount) == .orderedSame
             }
         }
+    }
+
+    func removeShoppingListItem(from recipeIngredient: RecipeIngredient, recipeName: String) {
+        let cleanIngredientName = recipeIngredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanRecipeName = recipeName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedAmount = recipeIngredient.amount.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let itemIndex = shoppingListItems.firstIndex(where: {
+            IngredientNameMatcher.matches(
+                storageName: $0.ingredientName,
+                recipeName: cleanIngredientName
+            )
+        }) else {
+            return
+        }
+
+        shoppingListItems[itemIndex].sources.removeAll {
+            $0.recipeName.localizedCaseInsensitiveCompare(cleanRecipeName) == .orderedSame &&
+            $0.amountText.localizedCaseInsensitiveCompare(normalizedAmount) == .orderedSame
+        }
+
+        if shoppingListItems[itemIndex].sources.isEmpty {
+            shoppingListItems.remove(at: itemIndex)
+        } else {
+            shoppingListItems[itemIndex].editedAmountText = nil
+        }
+
+        saveShoppingListItems()
     }
 
     func completeShoppingListItem(_ item: ShoppingListItem) {
@@ -389,6 +458,87 @@ final class StorageViewModel: ObservableObject {
         case .liter: return 0.1
         case .ml: return 50
         case .pcs: return 1
+        }
+    }
+
+    private func consumptionAmount(from amountText: String, convertedTo unit: UnitType) -> Double {
+        let normalizedText = amountText
+            .lowercased()
+            .replacingOccurrences(of: ",", with: ".")
+        let amount = parsedNumericAmount(from: normalizedText) ?? fallbackConsumptionAmount(for: unit)
+
+        if normalizedText.range(of: #"\bkg\b"#, options: .regularExpression) != nil {
+            return convert(amount, from: .kg, to: unit) ?? amount
+        }
+        if normalizedText.range(of: #"\b(g|gram|grams)\b"#, options: .regularExpression) != nil {
+            return convert(amount, from: .g, to: unit) ?? amount
+        }
+        if normalizedText.range(of: #"\b(ml|milliliter|milliliters|millilitre|millilitres)\b"#, options: .regularExpression) != nil {
+            return convert(amount, from: .ml, to: unit) ?? amount
+        }
+        if normalizedText.range(of: #"\b(l|liter|liters|litre|litres)\b"#, options: .regularExpression) != nil {
+            return convert(amount, from: .liter, to: unit) ?? amount
+        }
+        if normalizedText.range(of: #"\b(tbsp|tablespoon|tablespoons)\b"#, options: .regularExpression) != nil {
+            return convert(amount * 15, from: .ml, to: unit) ?? amount
+        }
+        if normalizedText.range(of: #"\b(tsp|teaspoon|teaspoons)\b"#, options: .regularExpression) != nil {
+            return convert(amount * 5, from: .ml, to: unit) ?? amount
+        }
+        if normalizedText.range(of: #"\b(cup|cups)\b"#, options: .regularExpression) != nil {
+            return convert(amount * 250, from: .ml, to: unit) ?? amount
+        }
+
+        return amount
+    }
+
+    private func parsedNumericAmount(from text: String) -> Double? {
+        if let fractionRange = text.range(
+            of: #"[0-9]+\s*/\s*[0-9]+"#,
+            options: .regularExpression
+        ) {
+            let parts = text[fractionRange].split(separator: "/")
+            if parts.count == 2,
+               let numerator = Double(parts[0].trimmingCharacters(in: .whitespaces)),
+               let denominator = Double(parts[1].trimmingCharacters(in: .whitespaces)),
+               denominator != 0 {
+                return numerator / denominator
+            }
+        }
+
+        guard let numberRange = text.range(
+            of: #"[0-9]+(\.[0-9]+)?"#,
+            options: .regularExpression
+        ) else {
+            return nil
+        }
+        return Double(text[numberRange])
+    }
+
+    private func fallbackConsumptionAmount(for unit: UnitType) -> Double {
+        switch unit {
+        case .kg: return 0.01
+        case .g: return 1
+        case .liter: return 0.005
+        case .ml: return 5
+        case .pcs: return 1
+        }
+    }
+
+    private func convert(_ amount: Double, from source: UnitType, to destination: UnitType) -> Double? {
+        switch (source, destination) {
+        case (.kg, .kg), (.g, .g), (.liter, .liter), (.ml, .ml), (.pcs, .pcs):
+            return amount
+        case (.kg, .g):
+            return amount * 1_000
+        case (.g, .kg):
+            return amount / 1_000
+        case (.liter, .ml):
+            return amount * 1_000
+        case (.ml, .liter):
+            return amount / 1_000
+        default:
+            return nil
         }
     }
 

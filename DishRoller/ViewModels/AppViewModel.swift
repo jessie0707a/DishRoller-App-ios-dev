@@ -109,12 +109,14 @@ final class AppViewModel: ObservableObject {
         persistGeneratedRecipes()
     }
 
+    func deleteRecipeHistoryRecord(_ record: DailyGeneratedRecipe) {
+        generatedRecipeRecords.removeAll { $0.id == record.id }
+        persistGeneratedRecipes()
+    }
+
     func consumeRecipeIngredients(for recipe: Recipe) {
         for recipeIngredient in recipe.ingredients {
-            guard let match = storageVM.ingredients.first(where: {
-                IngredientNameMatcher.matches(storageName: $0.name, recipeName: recipeIngredient.name)
-            }) else { continue }
-            storageVM.decrease(match)
+            storageVM.consume(recipeIngredient)
         }
 
         recipeCookCounts[recipe.id, default: 0] += 1
@@ -123,6 +125,48 @@ final class AppViewModel: ObservableObject {
 
     func cookCount(for recipe: Recipe) -> Int {
         recipeCookCounts[recipe.id, default: 0]
+    }
+
+    func regenerationContext(for recipe: Recipe) -> RecipeGenerationContext {
+        if currentRecipe?.id == recipe.id, let currentRecipeContext {
+            return currentRecipeContext
+        }
+
+        let ingredients = recipe.ingredients.map { recipeIngredient in
+            storageVM.ingredients.first {
+                IngredientNameMatcher.matches(
+                    storageName: $0.name,
+                    recipeName: recipeIngredient.name
+                )
+            } ?? Ingredient(
+                name: recipeIngredient.name,
+                category: storageVM.shoppingCategory(for: recipeIngredient.name),
+                amount: 1,
+                unit: .pcs
+            )
+        }
+
+        let time = CookingTime.allCases.first {
+            recipe.estimatedTime.localizedCaseInsensitiveContains($0.rawValue)
+        } ?? .thirty
+        let type = DishType.allCases.first { candidate in
+            recipe.flavourTags.contains {
+                $0.localizedCaseInsensitiveCompare(candidate.rawValue) == .orderedSame
+            }
+        } ?? .any
+        let style = FlavourStyle.allCases.first { candidate in
+            recipe.flavourTags.contains {
+                $0.localizedCaseInsensitiveCompare(candidate.rawValue) == .orderedSame
+            }
+        } ?? .any
+
+        return RecipeGenerationContext(
+            ingredients: ingredients,
+            time: time,
+            type: type,
+            style: style,
+            customPreferences: "Create a different recipe from \(recipe.title)."
+        )
     }
 
     func toggleSavedState(for recipe: Recipe) {

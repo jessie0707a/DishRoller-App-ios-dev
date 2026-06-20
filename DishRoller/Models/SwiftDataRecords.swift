@@ -64,6 +64,7 @@ final class StoredRecipeRecord {
     var ingredientsData: Data
     var procedureData: Data
     var isSaved: Bool
+    var imageFileName: String?
     var orderIndex: Int
 
     init(recipe: Recipe, orderIndex: Int) {
@@ -74,6 +75,7 @@ final class StoredRecipeRecord {
         self.ingredientsData = Self.encode(recipe.ingredients)
         self.procedureData = Self.encode(recipe.procedure)
         self.isSaved = recipe.isSaved
+        self.imageFileName = recipe.imageFileName
         self.orderIndex = orderIndex
     }
 
@@ -84,6 +86,7 @@ final class StoredRecipeRecord {
         ingredientsData = Self.encode(recipe.ingredients)
         procedureData = Self.encode(recipe.procedure)
         isSaved = recipe.isSaved
+        imageFileName = recipe.imageFileName
         self.orderIndex = orderIndex
     }
 
@@ -95,7 +98,8 @@ final class StoredRecipeRecord {
             flavourTags: Self.decode([String].self, from: flavourTagsData, fallback: []),
             ingredients: Self.decode([RecipeIngredient].self, from: ingredientsData, fallback: []),
             procedure: Self.decode([RecipeProcedureStep].self, from: procedureData, fallback: []),
-            isSaved: isSaved
+            isSaved: isSaved,
+            imageFileName: imageFileName
         )
     }
 
