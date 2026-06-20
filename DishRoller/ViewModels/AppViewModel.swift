@@ -33,7 +33,9 @@ final class AppViewModel: ObservableObject {
     @Published var currentRecipe: Recipe?
     @Published var currentRecipeContext: RecipeGenerationContext?
     @Published var isRecipeHistoryPresented = false
+    @Published var isFavouriteListPresented = false
     @Published private var generatedRecipeRecords: [DailyGeneratedRecipe] = []
+    @Published private var recipeCookCounts: [UUID: Int] = [:]
 
     @Published var storageVM = StorageViewModel()
     @Published var savedRecipesVM = SavedRecipesViewModel()
@@ -56,11 +58,30 @@ final class AppViewModel: ObservableObject {
             }
     }
 
+    var rankedFavouriteRecipes: [Recipe] {
+        let savedOrder = Dictionary(
+            uniqueKeysWithValues: savedRecipesVM.savedRecipes.enumerated().map {
+                ($0.element.id, $0.offset)
+            }
+        )
+
+        return savedRecipesVM.savedRecipes.sorted { lhs, rhs in
+            let lhsCount = cookCount(for: lhs)
+            let rhsCount = cookCount(for: rhs)
+            if lhsCount != rhsCount {
+                return lhsCount > rhsCount
+            }
+            return (savedOrder[lhs.id] ?? 0) < (savedOrder[rhs.id] ?? 0)
+        }
+    }
+
     private let todayMenuKey = "dishroller.todayGeneratedMenus"
+    private let recipeCookCountsKey = "dishroller.recipeCookCounts"
     private var cancellables: Set<AnyCancellable> = []
 
     init() {
         loadTodayMenus()
+        loadRecipeCookCounts()
         bindChildViewModels()
     }
 
@@ -95,6 +116,13 @@ final class AppViewModel: ObservableObject {
             }) else { continue }
             storageVM.decrease(match)
         }
+
+        recipeCookCounts[recipe.id, default: 0] += 1
+        persistRecipeCookCounts()
+    }
+
+    func cookCount(for recipe: Recipe) -> Int {
+        recipeCookCounts[recipe.id, default: 0]
     }
 
     func toggleSavedState(for recipe: Recipe) {
@@ -166,6 +194,30 @@ final class AppViewModel: ObservableObject {
     private func persistGeneratedRecipes() {
         guard let data = try? JSONEncoder().encode(generatedRecipeRecords) else { return }
         UserDefaults.standard.set(data, forKey: todayMenuKey)
+    }
+
+    private func loadRecipeCookCounts() {
+        guard let data = UserDefaults.standard.data(forKey: recipeCookCountsKey),
+              let storedCounts = try? JSONDecoder().decode([String: Int].self, from: data)
+        else {
+            recipeCookCounts = [:]
+            return
+        }
+
+        recipeCookCounts = Dictionary(
+            uniqueKeysWithValues: storedCounts.compactMap { key, value in
+                guard let id = UUID(uuidString: key) else { return nil }
+                return (id, value)
+            }
+        )
+    }
+
+    private func persistRecipeCookCounts() {
+        let storedCounts = Dictionary(
+            uniqueKeysWithValues: recipeCookCounts.map { ($0.key.uuidString, $0.value) }
+        )
+        guard let data = try? JSONEncoder().encode(storedCounts) else { return }
+        UserDefaults.standard.set(data, forKey: recipeCookCountsKey)
     }
 
     private func syncedRecipeState(for recipe: Recipe) -> Recipe {

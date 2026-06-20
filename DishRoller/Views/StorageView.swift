@@ -199,8 +199,7 @@ struct StorageView: View {
     private var categoryFilters: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Categories")
-                .font(.headline)
-                .fontWeight(.black)
+                .font(.system(size: 22, weight: .black))
                 .foregroundColor(.black)
 
             ScrollView(.horizontal, showsIndicators: false) {

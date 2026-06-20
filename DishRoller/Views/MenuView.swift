@@ -11,25 +11,23 @@ struct MenuView: View {
     @EnvironmentObject var appVM: AppViewModel
     @StateObject private var vm = MenuViewModel()
     @State private var showCongratulations = false
+    @State private var selectedTodayRecipeIndex = 0
+    @GestureState private var todayCarouselDrag: CGFloat = 0
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
+                    todayRecipesSection
                     menuSection(
-                        title: "Today’s Recipes",
-                        recipes: appVM.todayMenuRecipes,
-                        emptyTitle: "No recipe generated today",
-                        emptyMessage: "Generate from DishRoller to add a recipe here.",
-                        showsSavedIndicator: true
-                    )
-                    menuSection(
-                        title: "Saved Recipes",
-                        recipes: appVM.savedRecipesVM.savedRecipes,
-                        emptyTitle: "No saved recipes",
+                        title: "Favourite",
+                        recipes: Array(appVM.rankedFavouriteRecipes.prefix(10)),
+                        emptyTitle: "No favourite recipes",
                         emptyMessage: "Tap the star on a recipe to keep it here.",
-                        showsSavedIndicator: false
+                        showsSavedIndicator: false,
+                        showsCookCount: true,
+                        showsMoreButton: !appVM.savedRecipesVM.savedRecipes.isEmpty
                     )
                 }
                 .padding(.horizontal, 18)
@@ -83,10 +81,198 @@ struct MenuView: View {
                     }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(.move(edge: .leading))
+                .transition(.move(edge: .trailing))
                 .zIndex(50)
             }
         }
+        .overlay {
+            if appVM.isFavouriteListPresented {
+                FavouriteRecipesView(
+                    recipes: appVM.rankedFavouriteRecipes,
+                    cookCount: appVM.cookCount,
+                    onBack: {
+                        closeFavouriteList()
+                    },
+                    onSelect: { recipe in
+                        closeFavouriteList(opening: recipe)
+                    }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.move(edge: .trailing))
+                .zIndex(50)
+            }
+        }
+    }
+
+    private var todayRecipesSection: some View {
+        let recipes = appVM.todayMenuRecipes
+
+        return VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Today’s Recipes", showsMoreButton: false)
+
+            if recipes.isEmpty {
+                emptyMenuCard(
+                    title: "No recipe generated today",
+                    message: "Generate from DishRoller to add a recipe here."
+                )
+            } else {
+                todayRecipeCarousel(recipes)
+            }
+        }
+        .onChange(of: recipes.count) { _, newCount in
+            selectedTodayRecipeIndex = min(selectedTodayRecipeIndex, max(newCount - 1, 0))
+        }
+    }
+
+    private func todayRecipeCarousel(_ recipes: [Recipe]) -> some View {
+        let visibleIndices = Array(
+            selectedTodayRecipeIndex..<min(selectedTodayRecipeIndex + 3, recipes.count)
+        )
+
+        return VStack(spacing: 10) {
+            ZStack {
+                ForEach(visibleIndices.reversed(), id: \.self) { index in
+                    let depth = index - selectedTodayRecipeIndex
+                    let sideOffset: CGFloat = depth == 1 ? 16 : (depth == 2 ? -16 : 0)
+
+                    todayRecipeCard(recipes[index])
+                        .offset(
+                            x: sideOffset + (depth == 0 ? todayCarouselDrag : 0),
+                            y: 0
+                        )
+                        .opacity(1 - (Double(depth) * 0.16))
+                        .zIndex(Double(3 - depth))
+                        .allowsHitTesting(depth == 0)
+                }
+            }
+            .frame(height: 178)
+            .padding(.horizontal, recipes.count > 1 ? 18 : 0)
+            .contentShape(Rectangle())
+            .gesture(todayCarouselGesture(recipeCount: recipes.count))
+
+            if recipes.count > 1 {
+                HStack(spacing: 6) {
+                    ForEach(recipes.indices, id: \.self) { index in
+                        Capsule()
+                            .fill(index == selectedTodayRecipeIndex ? Color.black : Color.black.opacity(0.16))
+                            .frame(width: index == selectedTodayRecipeIndex ? 18 : 6, height: 6)
+                    }
+                }
+                .animation(.spring(response: 0.28, dampingFraction: 0.82), value: selectedTodayRecipeIndex)
+            }
+        }
+    }
+
+    private func todayRecipeCard(_ recipe: Recipe) -> some View {
+        let isFavourite = appVM.savedRecipesVM.isSaved(recipe)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.yellow.opacity(0.28))
+                        .frame(width: 52, height: 52)
+
+                    Image(systemName: "fork.knife")
+                        .font(.title3.weight(.black))
+                        .foregroundColor(.black)
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(recipe.title)
+                        .font(.system(size: 20, weight: .black))
+                        .foregroundColor(.black)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    Text(recipe.estimatedTime)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(.gray)
+                }
+
+                Spacer(minLength: 8)
+
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                        appVM.toggleSavedState(for: recipe)
+                    }
+                } label: {
+                    Image(systemName: isFavourite ? "star.fill" : "star")
+                        .font(.caption.weight(.black))
+                        .foregroundColor(isFavourite ? .yellow : .black)
+                        .frame(width: 32, height: 32)
+                        .background(isFavourite ? Color.black : Color.yellow)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isFavourite ? "Remove from favourites" : "Add to favourites")
+            }
+
+            HStack(spacing: 6) {
+                ForEach(Array(recipe.flavourTags.prefix(3)), id: \.self) { tag in
+                    Text(tag)
+                        .font(.caption.weight(.black))
+                        .foregroundColor(.black)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .frame(height: 28)
+                        .background(Color.yellow.opacity(0.42))
+                        .clipShape(Capsule())
+                }
+            }
+
+            HStack {
+                Label("\(recipe.ingredients.count) ingredients", systemImage: "basket")
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.black.opacity(0.66))
+
+                Spacer()
+
+                Button {
+                    appVM.presentRecipe(recipe)
+                } label: {
+                    Image(systemName: "arrow.right")
+                        .font(.caption.weight(.black))
+                        .foregroundColor(.yellow)
+                        .frame(width: 32, height: 32)
+                        .background(Color.black)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open \(recipe.title)")
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 174, maxHeight: 174, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.07), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.1), radius: 12, x: 0, y: 2)
+    }
+
+    private func todayCarouselGesture(recipeCount: Int) -> some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($todayCarouselDrag) { value, state, _ in
+                state = max(-90, min(24, value.translation.width))
+            }
+            .onEnded { value in
+                let shouldAdvance = value.translation.width < -45 || value.predictedEndTranslation.width < -90
+                let shouldGoBack = value.translation.width > 45 || value.predictedEndTranslation.width > 90
+
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+                    if shouldAdvance, selectedTodayRecipeIndex < recipeCount - 1 {
+                        selectedTodayRecipeIndex += 1
+                    } else if shouldGoBack, selectedTodayRecipeIndex > 0 {
+                        selectedTodayRecipeIndex -= 1
+                    }
+                }
+            }
     }
 
     private var header: some View {
@@ -121,59 +307,94 @@ struct MenuView: View {
         recipes: [Recipe],
         emptyTitle: String,
         emptyMessage: String,
-        showsSavedIndicator: Bool
+        showsSavedIndicator: Bool,
+        showsCookCount: Bool,
+        showsMoreButton: Bool = false
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle(title)
+            sectionTitle(title, showsMoreButton: showsMoreButton)
 
             if recipes.isEmpty {
                 emptyMenuCard(title: emptyTitle, message: emptyMessage)
             } else {
                 VStack(spacing: 10) {
                     ForEach(recipes) { recipe in
-                        menuSummaryCard(recipe, showsSavedIndicator: showsSavedIndicator)
+                        menuSummaryCard(
+                            recipe,
+                            showsSavedIndicator: showsSavedIndicator,
+                            showsCookCount: showsCookCount
+                        )
                     }
                 }
+                .padding(.horizontal, title == "Favourite" ? 2 : 0)
             }
         }
     }
 
-    private func sectionTitle(_ title: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: title == "Today’s Recipes" ? "sparkles" : "heart.fill")
-                .font(.caption.weight(.black))
-                .foregroundColor(.black)
-                .frame(width: 28, height: 28)
-                .background(Color.yellow)
-                .clipShape(Circle())
-
+    private func sectionTitle(_ title: String, showsMoreButton: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .font(.system(size: 22, weight: .black))
                 .foregroundColor(.black)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
 
-            Spacer(minLength: 0)
+            Spacer()
+
+            if showsMoreButton {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.32)) {
+                        appVM.isFavouriteListPresented = true
+                    }
+                } label: {
+                    Text("Show more")
+                        .font(.subheadline.weight(.black))
+                        .underline()
+                        .foregroundStyle(.black)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show all favourite recipes")
+            }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 2)
     }
 
-    private func menuSummaryCard(_ recipe: Recipe, showsSavedIndicator: Bool) -> some View {
+    private func menuSummaryCard(
+        _ recipe: Recipe,
+        showsSavedIndicator: Bool,
+        showsCookCount: Bool
+    ) -> some View {
         Button {
             appVM.presentRecipe(recipe)
         } label: {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
                     Text(recipe.title)
                         .font(.headline.weight(.black))
                         .foregroundColor(.black)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
-                    Text(recipe.estimatedTime)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(.gray)
+                    Spacer(minLength: 8)
 
+                    if showsCookCount {
+                        Text(cookCountText(for: recipe))
+                            .font(.caption.weight(.black))
+                            .foregroundColor(.black)
+                            .lineLimit(1)
+                            .padding(.horizontal, 9)
+                            .frame(height: 26)
+                            .background(Color.yellow.opacity(0.52))
+                            .clipShape(Capsule())
+                    }
+                }
+
+                Text(recipe.estimatedTime)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(.gray)
+
+                HStack(alignment: .center, spacing: 8) {
                     HStack(spacing: 6) {
                         ForEach(Array(recipe.flavourTags.prefix(3)), id: \.self) { tag in
                             Text(tag)
@@ -186,24 +407,24 @@ struct MenuView: View {
                                 .clipShape(Capsule())
                         }
                     }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: summaryIconName(for: recipe, showsSavedIndicator: showsSavedIndicator))
+                        .font(.headline.weight(.black))
+                        .foregroundColor(.black)
+                        .frame(width: 34, height: 34)
+                        .background(showsSavedIndicator ? Color.clear : Color(.systemGray6))
+                        .clipShape(Circle())
                 }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: summaryIconName(for: recipe, showsSavedIndicator: showsSavedIndicator))
-                    .font(.headline.weight(.black))
-                    .foregroundColor(.black)
-                    .frame(width: 36, height: 36)
-                    .background(showsSavedIndicator ? Color.clear : Color(.systemGray6))
-                    .clipShape(Circle())
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 138, maxHeight: 138, alignment: .leading)
             .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.black.opacity(0.07), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -212,6 +433,11 @@ struct MenuView: View {
     private func summaryIconName(for recipe: Recipe, showsSavedIndicator: Bool) -> String {
         guard showsSavedIndicator else { return "chevron.right" }
         return recipe.isSaved ? "star.fill" : "star"
+    }
+
+    private func cookCountText(for recipe: Recipe) -> String {
+        let count = appVM.cookCount(for: recipe)
+        return count == 1 ? "1 time" : "\(count) times"
     }
 
     private func emptyMenuCard(title: String, message: String) -> some View {
@@ -326,6 +552,17 @@ struct MenuView: View {
     private func closeHistory(opening recipe: Recipe? = nil) {
         withAnimation(.easeInOut(duration: 0.32)) {
             appVM.isRecipeHistoryPresented = false
+        }
+
+        guard let recipe else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) {
+            appVM.presentRecipe(recipe)
+        }
+    }
+
+    private func closeFavouriteList(opening recipe: Recipe? = nil) {
+        withAnimation(.easeInOut(duration: 0.32)) {
+            appVM.isFavouriteListPresented = false
         }
 
         guard let recipe else { return }
@@ -527,6 +764,170 @@ private struct RecipeHistoryView: View {
             return "Yesterday"
         }
         return date.formatted(date: .long, time: .omitted)
+    }
+}
+
+private struct FavouriteRecipesView: View {
+    let recipes: [Recipe]
+    let cookCount: (Recipe) -> Int
+    let onBack: () -> Void
+    let onSelect: (Recipe) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+
+            if recipes.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(recipes) { recipe in
+                            favouriteCard(recipe)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 16)
+                    .padding(.bottom, 30)
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(favouritePageBackground)
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    private var header: some View {
+        ZStack {
+            Text("Favourite")
+                .font(.system(size: 22, weight: .black))
+                .foregroundStyle(.black)
+
+            HStack {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(.yellow)
+                        .frame(width: 46, height: 46)
+                        .background(Color.black)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back to recipes")
+
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(Color(red: 1, green: 0.82, blue: 0.05))
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "heart.slash")
+                .font(.system(size: 42, weight: .black))
+
+            Text("No Favourite Recipes")
+                .font(.title3.weight(.black))
+
+            Text("Recipes saved with the star button will appear here.")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.gray)
+                .multilineTextAlignment(.center)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func favouriteCard(_ recipe: Recipe) -> some View {
+        Button {
+            onSelect(recipe)
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(recipe.title)
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(.black)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    Spacer(minLength: 8)
+
+                    Text(cookCountText(for: recipe))
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.black)
+                        .lineLimit(1)
+                        .padding(.horizontal, 9)
+                        .frame(height: 26)
+                        .background(Color.yellow.opacity(0.52))
+                        .clipShape(Capsule())
+                }
+
+                Text(recipe.estimatedTime)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.gray)
+
+                HStack(alignment: .center, spacing: 8) {
+                    HStack(spacing: 6) {
+                        ForEach(Array(recipe.flavourTags.prefix(3)), id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.black)
+                                .lineLimit(1)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.yellow.opacity(0.42))
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.black))
+                        .foregroundStyle(.black)
+                        .frame(width: 34, height: 34)
+                        .background(Color.yellow)
+                        .clipShape(Circle())
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 138, maxHeight: 138, alignment: .leading)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.black.opacity(0.07), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func cookCountText(for recipe: Recipe) -> String {
+        let count = cookCount(recipe)
+        return count == 1 ? "1 time" : "\(count) times"
+    }
+
+    private var favouritePageBackground: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Color(red: 1, green: 0.82, blue: 0.05)
+
+                Image("shopping-food-pattern")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
+                    .opacity(0.24)
+
+                Color.yellow.opacity(0.12)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }
 
