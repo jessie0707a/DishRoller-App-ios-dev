@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct AvoidancePreferencesView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appVM: AppViewModel
 
     var body: some View {
@@ -17,9 +18,9 @@ struct AvoidancePreferencesView: View {
                     Label("Add avoid card", systemImage: "plus.circle.fill")
                         .font(.headline)
                         .fontWeight(.black)
-                        .foregroundColor(.black)
+                        .foregroundColor(.yellow)
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Color.yellow)
+                        .background(Color.black)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
@@ -49,9 +50,56 @@ struct AvoidancePreferencesView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("Avoid Foods")
-        .navigationBarTitleDisplayMode(.inline)
+        .background(avoidancePageBackground)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            avoidancePageHeader
+        }
+    }
+
+    private var avoidancePageHeader: some View {
+        ZStack {
+            Text("Avoid Foods")
+                .font(.headline.weight(.black))
+                .foregroundStyle(.black)
+
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .black))
+                        .foregroundStyle(.yellow)
+                        .frame(width: 48, height: 48)
+                        .background(Color.black)
+                        .clipShape(Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(Color(red: 1, green: 0.82, blue: 0.05))
+    }
+
+    private var avoidancePageBackground: some View {
+        ZStack {
+            Color(red: 1, green: 0.82, blue: 0.05)
+
+            Image("shopping-food-pattern")
+                .resizable()
+                .scaledToFill()
+                .opacity(0.24)
+
+            Color.yellow.opacity(0.12)
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }
 

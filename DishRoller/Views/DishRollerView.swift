@@ -29,6 +29,7 @@ struct DishRollerView: View {
     @State private var isSpinning = false
     @State private var wheelRotation = 0.0
     @State private var spinTimer: Timer?
+    @State private var wheelIngredientSnapshot: [Ingredient] = []
     @State private var remainingSpins = 3
     @State private var selectedComboCategories: Set<IngredientCategory> = [.meat, .seafood, .veg]
     @State private var magicPulse = false
@@ -673,8 +674,12 @@ struct DishRollerView: View {
         }
     }
 
-    private var wheelIngredients: [Ingredient] {
+    private var availableWheelIngredients: [Ingredient] {
         vm.selectableIngredients(from: appVM.storageVM.ingredients, matching: selectedComboCategories)
+    }
+
+    private var wheelIngredients: [Ingredient] {
+        wheelIngredientSnapshot.isEmpty ? availableWheelIngredients : wheelIngredientSnapshot
     }
 
     private var comboSelectionTitle: String {
@@ -683,14 +688,14 @@ struct DishRollerView: View {
         return orderedSelections.map(\.menuTitle).joined(separator: ", ")
     }
 
-    private var currentWheelSelection: Ingredient? {
-        guard !wheelIngredients.isEmpty else { return nil }
-        guard wheelIngredients.count > 1 else { return wheelIngredients[0] }
+    private func wheelSelection(from ingredients: [Ingredient]) -> Ingredient? {
+        guard !ingredients.isEmpty else { return nil }
+        guard ingredients.count > 1 else { return ingredients[0] }
 
-        let segmentAngle = 360.0 / Double(wheelIngredients.count)
+        let segmentAngle = 360.0 / Double(ingredients.count)
         let pointerAngle = normalizedDegrees((segmentAngle / 2) - wheelRotation)
-        let index = Int(pointerAngle / segmentAngle) % wheelIngredients.count
-        return wheelIngredients[index]
+        let index = Int(pointerAngle / segmentAngle) % ingredients.count
+        return ingredients[index]
     }
 
     private var wheelView: some View {
@@ -895,14 +900,13 @@ struct DishRollerView: View {
     }
 
     private func toggleWheelSpin() {
-        guard !wheelIngredients.isEmpty else { return }
-
         if isSpinning {
             isSpinning = false
             stopSpinTimer()
             remainingSpins = max(remainingSpins - 1, 0)
 
-            if let selectedIngredient = currentWheelSelection {
+            let stoppedWheelIngredients = wheelIngredients
+            if let selectedIngredient = wheelSelection(from: stoppedWheelIngredients) {
                 vm.addSelection(selectedIngredient)
             }
 
@@ -910,6 +914,10 @@ struct DishRollerView: View {
                 activeControlPanel = .results
             }
         } else if remainingSpins > 0 {
+            let nextWheelIngredients = availableWheelIngredients
+            guard !nextWheelIngredients.isEmpty else { return }
+
+            wheelIngredientSnapshot = nextWheelIngredients
             isSpinning = true
             startSpinTimer()
         }
@@ -933,6 +941,7 @@ struct DishRollerView: View {
         isSpinning = false
         remainingSpins = 3
         vm.clearResults()
+        wheelIngredientSnapshot = []
     }
 
     private func removeSelectedResult(_ ingredient: Ingredient) {
@@ -1036,9 +1045,7 @@ struct ResultFlowLayout: Layout {
         var measuredWidth: CGFloat = 0
 
         for subview in subviews {
-            let availableWidth = max(maxWidth - currentX, 0)
-            let proposedWidth = maxWidth > 0 ? availableWidth : nil
-            var size = subview.sizeThatFits(ProposedViewSize(width: proposedWidth, height: nil))
+            var size = subview.sizeThatFits(.unspecified)
 
             if maxWidth > 0, size.width > maxWidth {
                 size = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
@@ -1074,8 +1081,7 @@ struct ResultFlowLayout: Layout {
         let maxWidth = bounds.width
 
         for subview in subviews {
-            let availableWidth = max(bounds.maxX - currentX, 0)
-            var size = subview.sizeThatFits(ProposedViewSize(width: availableWidth, height: nil))
+            var size = subview.sizeThatFits(.unspecified)
 
             if size.width > maxWidth {
                 size = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))

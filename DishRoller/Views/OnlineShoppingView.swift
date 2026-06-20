@@ -8,14 +8,15 @@
 import SwiftUI
 
 struct OnlineShoppingView: View {
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject var storageVM: StorageViewModel
     @State private var pendingRecoveryItem: ShoppingListItem?
     @State private var selectedShoppingItemID: UUID?
 
     private let shops = [
-        "Woolworths Online",
-        "Coles Online",
-        "Asian Grocery Online"
+        OnlineShop(name: "Woolworths Online", url: URL(string: "https://www.woolworths.com.au/")!),
+        OnlineShop(name: "Coles Online", url: URL(string: "https://www.coles.com.au/")!),
+        OnlineShop(name: "Umall Asian Grocery", url: URL(string: "https://www.umall.com.au/")!)
     ]
 
     var body: some View {
@@ -40,30 +41,45 @@ struct OnlineShoppingView: View {
                 }
             } header: {
                 Text("Shopping List")
+                    .foregroundStyle(.black)
             }
 
             Section {
-                ForEach(shops, id: \.self) { shop in
-                    HStack(spacing: 12) {
-                        Image(systemName: "cart.fill")
-                            .foregroundColor(.yellow)
-                            .frame(width: 24)
+                ForEach(shops) { shop in
+                    Link(destination: shop.url) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "cart.fill")
+                                .foregroundColor(.yellow)
+                                .frame(width: 24)
 
-                        Text(shop)
-                            .fontWeight(.bold)
-                            .foregroundColor(.black)
+                            Text(shop.name)
+                                .fontWeight(.bold)
+                                .foregroundColor(.black)
+
+                            Spacer()
+
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.black))
+                                .foregroundStyle(.black.opacity(0.55))
+                        }
                     }
+                    .buttonStyle(.plain)
                     .padding(.vertical, 8)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                 }
             } header: {
                 Text("Online Shopping")
+                    .foregroundStyle(.black)
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("Go Shopping")
+        .background(shoppingPageBackground)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            shoppingPageHeader
+        }
         .confirmationDialog(
             "Return this item to the shopping list?",
             isPresented: Binding(
@@ -88,6 +104,50 @@ struct OnlineShoppingView: View {
         } message: {
             Text("The storage record created for this purchase will be deleted, and the item will return to the active shopping list.")
         }
+    }
+
+    private var shoppingPageHeader: some View {
+        ZStack {
+            Text("Go Shopping")
+                .font(.headline.weight(.black))
+                .foregroundStyle(.black)
+
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .black))
+                        .foregroundStyle(.yellow)
+                        .frame(width: 48, height: 48)
+                        .background(Color.black)
+                        .clipShape(Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(Color(red: 1, green: 0.82, blue: 0.05))
+    }
+
+    private var shoppingPageBackground: some View {
+        ZStack {
+            Color(red: 1, green: 0.82, blue: 0.05)
+
+            Image("shopping-food-pattern")
+                .resizable()
+                .scaledToFill()
+                .opacity(0.24)
+
+            Color.yellow.opacity(0.12)
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 
     private var sortedShoppingListItems: [ShoppingListItem] {
@@ -290,6 +350,13 @@ struct OnlineShoppingView: View {
             Color(red: 0.86, green: 0.55, blue: 0.04)
         }
     }
+}
+
+private struct OnlineShop: Identifiable {
+    let name: String
+    let url: URL
+
+    var id: String { name }
 }
 
 #Preview {

@@ -94,7 +94,9 @@ struct StorageView: View {
                     pendingDeleteIngredient = nil
                 }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel") {
+                pendingDeleteIngredient = nil
+            }
         } message: {
             if let ingredient = pendingDeleteIngredient {
                 Text("This will remove the \(ingredient.name) record with \(formattedAmount(for: ingredient)).")
