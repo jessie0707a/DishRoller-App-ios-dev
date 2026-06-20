@@ -31,9 +31,9 @@ struct RecipeIngredientRow: View {
                 .minimumScaleFactor(0.68)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .layoutPriority(2)
+                .layoutPriority(0)
 
-            HStack(spacing: 6) {
+            HStack(spacing: 10) {
                 amountBadge(title: ingredient.amount)
 
                 if let form = ingredient.form?.nonEmpty {
@@ -51,15 +51,16 @@ struct RecipeIngredientRow: View {
                         Image(systemName: isInShoppingList ? "cart.fill.badge.plus" : "cart.badge.plus")
                             .font(.caption.weight(.black))
                             .foregroundColor(isInShoppingList ? .white : .black)
-                            .frame(width: 34, height: 30)
+                            .frame(width: 34, height: 34)
                             .background(isInShoppingList ? Color.green : Color.yellow)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(isInShoppingList ? "Added \(ingredient.name) to shopping list" : "Add \(ingredient.name) to shopping list")
                 }
             }
-            .layoutPriority(0)
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(3)
             .zIndex(1)
         }
         .padding(.vertical, 6)
@@ -69,9 +70,9 @@ struct RecipeIngredientRow: View {
         Image(systemName: exists ? "checkmark" : "exclamationmark")
             .font(.caption.weight(.black))
             .foregroundColor(exists ? .white : .black)
-            .frame(width: 30, height: 30)
+            .frame(width: 34, height: 34)
             .background(exists ? Color.black : Color(.systemGray5))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(Circle())
             .accessibilityLabel(exists ? "In storage" : "Missing from storage")
     }
 
@@ -79,7 +80,9 @@ struct RecipeIngredientRow: View {
         infoBadge(
             id: .amount,
             title: title,
+            minWidth: 58,
             maxWidth: 86,
+            preservesFullText: true,
             backgroundColor: Color.yellow.opacity(0.78),
             borderColor: Color.orange.opacity(0.38)
         )
@@ -89,7 +92,9 @@ struct RecipeIngredientRow: View {
         infoBadge(
             id: .form,
             title: title,
+            minWidth: 44,
             maxWidth: 78,
+            preservesFullText: false,
             backgroundColor: Color.mint.opacity(0.55),
             borderColor: Color.teal.opacity(0.35)
         )
@@ -98,7 +103,9 @@ struct RecipeIngredientRow: View {
     private func infoBadge(
         id: BadgeID,
         title: String,
+        minWidth: CGFloat,
         maxWidth: CGFloat,
+        preservesFullText: Bool,
         backgroundColor: Color,
         borderColor: Color
     ) -> some View {
@@ -110,11 +117,12 @@ struct RecipeIngredientRow: View {
             .minimumScaleFactor(0.86)
             .truncationMode(.tail)
             .padding(.horizontal, 10)
-            .frame(minWidth: 44, maxWidth: maxWidth, minHeight: 30)
+            .frame(minWidth: minWidth, maxWidth: maxWidth, minHeight: 34)
+            .fixedSize(horizontal: preservesFullText, vertical: false)
             .background(backgroundColor)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(Capsule())
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                Capsule()
                     .stroke(borderColor, lineWidth: 1)
             )
             .overlay(alignment: .top) {

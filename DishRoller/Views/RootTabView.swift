@@ -52,7 +52,8 @@ struct RootTabView: View {
     }
 
     private var isRecipeOverlayPresented: Bool {
-        appVM.selectedTab == 2 && appVM.currentRecipe != nil
+        appVM.selectedTab == 2
+            && (appVM.currentRecipe != nil || appVM.isRecipeHistoryPresented)
     }
 
     private var bottomNavigationOverlay: some View {

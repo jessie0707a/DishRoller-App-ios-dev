@@ -10,9 +10,9 @@ import Combine
 
 @MainActor
 final class DishRollerViewModel: ObservableObject {
-    @Published var selectedTime: CookingTime = .fifteen
-    @Published var selectedType: DishType = .mainCourse
-    @Published var selectedStyle: FlavourStyle = .chinese
+    var selectedTime: CookingTime = .fifteen
+    var selectedType: DishType = .mainCourse
+    var selectedStyle: FlavourStyle = .chinese
     @Published var customPreferences = ""
 
     @Published var selectedResults: [Ingredient] = []

@@ -21,6 +21,24 @@ struct DishRollerView: View {
         case results
     }
 
+    private struct WeightedWheelSegment: Identifiable {
+        let ingredient: Ingredient
+        let startAngle: Double
+        let endAngle: Double
+
+        var id: UUID { ingredient.id }
+        var midAngle: Double { startAngle + ((endAngle - startAngle) / 2) }
+    }
+
+    private struct RecipeWheelSegment: Identifiable {
+        let recipe: Recipe
+        let startAngle: Double
+        let endAngle: Double
+
+        var id: UUID { recipe.id }
+        var midAngle: Double { startAngle + ((endAngle - startAngle) / 2) }
+    }
+
     private let comboCategories: [IngredientCategory] = [.meat, .seafood, .veg]
 
     @EnvironmentObject var appVM: AppViewModel
@@ -30,8 +48,12 @@ struct DishRollerView: View {
     @State private var wheelRotation = 0.0
     @State private var spinTimer: Timer?
     @State private var wheelIngredientSnapshot: [Ingredient] = []
+    @State private var wheelRecipeSnapshot: [Recipe] = []
+    @State private var wheelExpiryModeSnapshot: Bool?
+    @State private var selectedDishRecipe: Recipe?
     @State private var remainingSpins = 3
     @State private var selectedComboCategories: Set<IngredientCategory> = [.meat, .seafood, .veg]
+    @State private var isExpiredFirstEnabled = false
     @State private var magicPulse = false
     @State private var magicRotation = 0.0
     @State private var storageNoticeMessage: String?
@@ -187,43 +209,60 @@ struct DishRollerView: View {
         .accessibilityLabel("Show \(title)")
     }
 
+    @ViewBuilder
     private var selectionPanelContent: some View {
+        if selectedMode == .dishes {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Saved Recipe Spin")
+                    .font(.headline.weight(.black))
+                    .foregroundStyle(.black)
+
+                Text("The wheel uses recipes from your saved collection.")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.black.opacity(0.68))
+
+                Text("\(appVM.savedRecipesVM.savedRecipes.count) recipes available")
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.white)
+                    .clipShape(Capsule())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            rawSelectionPanelContent
+        }
+    }
+
+    private var rawSelectionPanelContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                compactSelectionGroup(
+                LocalSelectionMenu(
                     title: "Time",
-                    titleView: { Text(vm.selectedTime.rawValue) }
-                ) {
-                    ForEach(CookingTime.allCases) { time in
-                        Button(time.rawValue) {
-                            vm.selectedTime = time
-                        }
-                    }
-                }
+                    initialSelection: vm.selectedTime,
+                    options: CookingTime.allCases,
+                    label: \.rawValue,
+                    onSelection: { vm.selectedTime = $0 }
+                )
 
-                compactSelectionGroup(
+                LocalSelectionMenu(
                     title: "Type",
-                    titleView: { Text(vm.selectedType.rawValue) }
-                ) {
-                    ForEach(DishType.allCases) { type in
-                        Button(type.rawValue) {
-                            vm.selectedType = type
-                        }
-                    }
-                }
+                    initialSelection: vm.selectedType,
+                    options: DishType.allCases,
+                    label: \.rawValue,
+                    onSelection: { vm.selectedType = $0 }
+                )
             }
 
             HStack(spacing: 12) {
-                compactSelectionGroup(
+                LocalSelectionMenu(
                     title: "Flavour",
-                    titleView: { Text(vm.selectedStyle.rawValue) }
-                ) {
-                    ForEach(FlavourStyle.allCases) { style in
-                        Button(style.rawValue) {
-                            vm.selectedStyle = style
-                        }
-                    }
-                }
+                    initialSelection: vm.selectedStyle,
+                    options: FlavourStyle.allCases,
+                    label: \.rawValue,
+                    onSelection: { vm.selectedStyle = $0 }
+                )
 
                 HStack(spacing: 8) {
                     preferenceCapsule
@@ -232,11 +271,23 @@ struct DishRollerView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            comboMoreMenu
+            HStack(spacing: 12) {
+                comboMoreMenu
+                expiredFirstButton
+            }
         }
     }
 
+    @ViewBuilder
     private var resultsPanelContent: some View {
+        if selectedMode == .dishes {
+            dishResultsPanelContent
+        } else {
+            rawResultsPanelContent
+        }
+    }
+
+    private var rawResultsPanelContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             FlowResultView(results: vm.selectedResults) { ingredient in
                 removeSelectedResult(ingredient)
@@ -246,6 +297,48 @@ struct DishRollerView: View {
             HStack(spacing: 14) {
                 generateButton
                 clearButton
+            }
+        }
+    }
+
+    private var dishResultsPanelContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let selectedDishRecipe {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(selectedDishRecipe.title)
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(.black)
+                        .lineLimit(2)
+
+                    Text(selectedDishRecipe.estimatedTime)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.gray)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                HStack(spacing: 14) {
+                    Button("Open Recipe") {
+                        appVM.presentRecipe(selectedDishRecipe)
+                    }
+                    .font(.subheadline.weight(.black))
+                    .foregroundStyle(.yellow)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 42)
+                    .background(Color.black)
+                    .clipShape(Capsule())
+
+                    clearButton
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text("Spin the wheel to choose a saved recipe.")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.black.opacity(0.65))
+                    .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
             }
         }
     }
@@ -428,7 +521,9 @@ struct DishRollerView: View {
         Menu {
             ForEach(comboCategories) { category in
                 Button {
-                    toggleComboCategory(category)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        toggleComboCategory(category)
+                    }
                 } label: {
                     HStack {
                         Text(category.menuTitle)
@@ -441,7 +536,7 @@ struct DishRollerView: View {
             }
         } label: {
             HStack(spacing: 8) {
-                Text("More")
+                Text("Combo")
                     .font(.subheadline.weight(.black))
                     .underline()
 
@@ -456,6 +551,36 @@ struct DishRollerView: View {
             .foregroundColor(.black.opacity(0.72))
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var expiredFirstButton: some View {
+        Button {
+            guard !isSpinning else { return }
+            isExpiredFirstEnabled.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isExpiredFirstEnabled ? "checkmark.circle.fill" : "circle")
+                    .font(.caption.weight(.black))
+
+                Text("Expired First")
+                    .font(.caption.weight(.black))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isExpiredFirstEnabled ? Color.yellow : Color.black)
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(isExpiredFirstEnabled ? Color.black : Color.white)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(Color.black.opacity(isExpiredFirstEnabled ? 0 : 0.16), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isSpinning)
+        .accessibilityLabel("Expired First")
+        .accessibilityValue(isExpiredFirstEnabled ? "On" : "Off")
     }
 
     @ViewBuilder
@@ -652,7 +777,7 @@ struct DishRollerView: View {
                 HStack(spacing: 4) {
                     ForEach(Mode.allCases) { mode in
                         Button {
-                            selectedMode = mode
+                            switchMode(to: mode)
                         } label: {
                             Text(mode.rawValue)
                                 .font(.subheadline)
@@ -675,11 +800,41 @@ struct DishRollerView: View {
     }
 
     private var availableWheelIngredients: [Ingredient] {
-        vm.selectableIngredients(from: appVM.storageVM.ingredients, matching: selectedComboCategories)
+        vm.selectableIngredients(
+            from: appVM.storageVM.ingredients,
+            matching: eligibleWheelCategories
+        )
+    }
+
+    private var eligibleWheelCategories: Set<IngredientCategory> {
+        var categories = selectedComboCategories
+        guard selectedComboCategories.count > 1 else {
+            return categories
+        }
+
+        let selectedCategories = Set(vm.selectedResults.map(\.category))
+
+        if selectedCategories.contains(.meat) {
+            categories.remove(.meat)
+        }
+
+        if selectedCategories.contains(.seafood) {
+            categories.remove(.seafood)
+        }
+
+        return categories
     }
 
     private var wheelIngredients: [Ingredient] {
         wheelIngredientSnapshot.isEmpty ? availableWheelIngredients : wheelIngredientSnapshot
+    }
+
+    private var wheelRecipes: [Recipe] {
+        wheelRecipeSnapshot.isEmpty ? appVM.savedRecipesVM.savedRecipes : wheelRecipeSnapshot
+    }
+
+    private var wheelUsesExpiryWeighting: Bool {
+        wheelExpiryModeSnapshot ?? isExpiredFirstEnabled
     }
 
     private var comboSelectionTitle: String {
@@ -692,13 +847,25 @@ struct DishRollerView: View {
         guard !ingredients.isEmpty else { return nil }
         guard ingredients.count > 1 else { return ingredients[0] }
 
-        let segmentAngle = 360.0 / Double(ingredients.count)
-        let pointerAngle = normalizedDegrees((segmentAngle / 2) - wheelRotation)
-        let index = Int(pointerAngle / segmentAngle) % ingredients.count
-        return ingredients[index]
+        let segments = wheelSegments(for: ingredients, expiryFirst: wheelUsesExpiryWeighting)
+        let localPointerAngle = normalizedDegrees(-90 - wheelRotation)
+
+        return segments.first { segment in
+            angle(localPointerAngle, isWithinStart: segment.startAngle, end: segment.endAngle)
+        }?.ingredient ?? segments.last?.ingredient
     }
 
     private var wheelView: some View {
+        Group {
+            if selectedMode == .dishes {
+                dishWheelView
+            } else {
+                rawWheelView
+            }
+        }
+    }
+
+    private var rawWheelView: some View {
         VStack(spacing: 8) {
             if wheelIngredients.isEmpty {
                 Text("Add ingredients in Storage to use the turntable.")
@@ -720,8 +887,11 @@ struct DishRollerView: View {
                             .offset(y: 284)
 
                         turntableWheel
-                            .rotationEffect(.degrees(wheelRotation))
                             .frame(width: wheelSize, height: wheelSize)
+                            .padding(16)
+                            .drawingGroup(opaque: false, colorMode: .nonLinear)
+                            .rotationEffect(.degrees(wheelRotation))
+                            .padding(-16)
                             .offset(x: 0, y: 122)
                             .frame(width: 370, height: 304)
                             .clipShape(RoundedRectangle(cornerRadius: 26))
@@ -788,11 +958,193 @@ struct DishRollerView: View {
         }
     }
 
+    private var dishWheelView: some View {
+        VStack(spacing: 8) {
+            if wheelRecipes.isEmpty {
+                ZStack {
+                    fadedEmptyRecipeWheel
+                        .opacity(0.24)
+
+                    VStack(spacing: 8) {
+                        Image(systemName: "bookmark.slash.fill")
+                            .font(.title2.weight(.black))
+
+                        Text("You haven't saved any recipe yet")
+                            .font(.headline.weight(.black))
+                            .multilineTextAlignment(.center)
+
+                        Text("Try to generate one first.")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.gray)
+                    }
+                    .foregroundStyle(.black)
+                    .padding(18)
+                    .background(Color.white.opacity(0.94))
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
+                }
+                .frame(height: 340)
+            } else {
+                GeometryReader { geometry in
+                    let wheelSize = geometry.size.width * 1.4
+
+                    ZStack {
+                        Ellipse()
+                            .fill(Color.black.opacity(0.16))
+                            .frame(width: wheelSize * 0.72, height: 38)
+                            .blur(radius: 14)
+                            .offset(y: 284)
+
+                        recipeTurntableWheel
+                            .frame(width: wheelSize, height: wheelSize)
+                            .padding(16)
+                            .drawingGroup(opaque: false, colorMode: .nonLinear)
+                            .rotationEffect(.degrees(wheelRotation))
+                            .padding(-16)
+                            .offset(x: 0, y: 122)
+                            .frame(width: 370, height: 304)
+                            .clipShape(RoundedRectangle(cornerRadius: 26))
+                            .shadow(color: .black.opacity(0.2), radius: 18, y: 10)
+
+                        wheelPointerAndButton
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .clipped()
+                }
+                .frame(height: 340)
+            }
+        }
+    }
+
+    private var wheelPointerAndButton: some View {
+        VStack(spacing: 0) {
+            Triangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.black, Color.black.opacity(0.78)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 20, height: 106)
+                .overlay(Triangle().stroke(Color.yellow, lineWidth: 2))
+                .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
+
+            Button {
+                toggleWheelSpin()
+            } label: {
+                Text(isSpinning ? "Stop" : "Start")
+                    .font(.title3.weight(.black))
+                    .foregroundColor(isSpinning ? .yellow : .black)
+                    .frame(width: 102, height: 102)
+                    .background(
+                        RadialGradient(
+                            colors: isSpinning
+                            ? [Color.black.opacity(0.82), .black]
+                            : [Color.yellow.opacity(0.92), .yellow],
+                            center: .topLeading,
+                            startRadius: 12,
+                            endRadius: 82
+                        )
+                    )
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.black, lineWidth: 5))
+                    .overlay(Circle().stroke(Color.white.opacity(0.55), lineWidth: 2).padding(8))
+                    .scaleEffect(isSpinning ? 1.05 : 1)
+                    .shadow(color: .black.opacity(0.24), radius: 14, y: 7)
+            }
+            .buttonStyle(.plain)
+            .animation(.spring(response: 0.24, dampingFraction: 0.7), value: isSpinning)
+            .offset(y: -10)
+        }
+        .offset(x: 0, y: 48)
+    }
+
+    private var fadedEmptyRecipeWheel: some View {
+        ZStack {
+            Circle().fill(Color.white)
+            Circle().stroke(Color.black, lineWidth: 9).padding(2)
+            Circle().stroke(Color.yellow, lineWidth: 26).padding(10)
+            Circle().stroke(Color.black, lineWidth: 6).padding(24)
+            Circle().fill(Color(.systemGray5)).padding(130)
+        }
+        .frame(width: 520, height: 520)
+        .offset(y: 130)
+        .frame(maxWidth: .infinity)
+        .clipped()
+    }
+
+    private var recipeTurntableWheel: some View {
+        GeometryReader { geometry in
+            let size = min(geometry.size.width, geometry.size.height)
+            let radius = size * 0.38
+            let segments = recipeWheelSegments(for: wheelRecipes)
+
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [.white, Color(.systemGray6), Color(.systemGray4)],
+                            center: .center,
+                            startRadius: size * 0.08,
+                            endRadius: size * 0.58
+                        )
+                    )
+                Circle().stroke(Color.black, lineWidth: 9).padding(2)
+                Circle().stroke(Color.yellow, lineWidth: 26).padding(10)
+                Circle().stroke(Color.black, lineWidth: 6).padding(24)
+
+                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                    WheelSegmentShape(
+                        startAngle: .degrees(segment.startAngle),
+                        endAngle: .degrees(segment.endAngle),
+                        innerRadiusRatio: 0.55
+                    )
+                    .fill(segmentFill(for: index))
+                    .overlay(
+                        WheelSegmentShape(
+                            startAngle: .degrees(segment.startAngle),
+                            endAngle: .degrees(segment.endAngle),
+                            innerRadiusRatio: 0.55
+                        )
+                        .stroke(Color.black, lineWidth: 6)
+                    )
+
+                    RecipeWheelSegmentLabel(recipe: segment.recipe)
+                        .frame(width: 105)
+                        .rotationEffect(.degrees(labelRotation(for: segment.midAngle)))
+                        .offset(
+                            x: cos(segment.midAngle * .pi / 180) * radius,
+                            y: sin(segment.midAngle * .pi / 180) * radius
+                        )
+                }
+
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [.white, Color(.systemGray6)],
+                            center: .topLeading,
+                            startRadius: size * 0.08,
+                            endRadius: size * 0.25
+                        )
+                    )
+                    .padding(size * 0.34)
+                    .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
+                Circle().stroke(Color.black, lineWidth: 5).padding(size * 0.25)
+                Circle().stroke(Color.yellow, lineWidth: 8).padding(size * 0.235)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+    }
+
     private var turntableWheel: some View {
         GeometryReader { geometry in
             let size = min(geometry.size.width, geometry.size.height)
             let radius = size * 0.38
-            let segmentAngle = 360.0 / Double(wheelIngredients.count)
+            let segments = wheelSegments(
+                for: wheelIngredients,
+                expiryFirst: wheelUsesExpiryWeighting
+            )
 
             ZStack {
                 Circle()
@@ -823,41 +1175,37 @@ struct DishRollerView: View {
                     .stroke(Color.black, lineWidth: 6)
                     .padding(24)
 
-                ForEach(Array(wheelIngredients.enumerated()), id: \.element.id) { index, ingredient in
-                    let startAngle = -90.0 - (segmentAngle / 2) + (Double(index) * segmentAngle)
-                    let endAngle = startAngle + segmentAngle
-                    let midAngle = startAngle + (segmentAngle / 2)
-
+                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
                     WheelSegmentShape(
-                        startAngle: .degrees(startAngle),
-                        endAngle: .degrees(endAngle),
+                        startAngle: .degrees(segment.startAngle),
+                        endAngle: .degrees(segment.endAngle),
                         innerRadiusRatio: 0.55
                     )
                     .fill(segmentFill(for: index))
                     .overlay(
                         WheelSegmentShape(
-                            startAngle: .degrees(startAngle),
-                            endAngle: .degrees(endAngle),
+                            startAngle: .degrees(segment.startAngle),
+                            endAngle: .degrees(segment.endAngle),
                             innerRadiusRatio: 0.55
                         )
                         .stroke(Color.black, lineWidth: 6)
                     )
                     .overlay(
                         WheelSegmentShape(
-                            startAngle: .degrees(startAngle),
-                            endAngle: .degrees(endAngle),
+                            startAngle: .degrees(segment.startAngle),
+                            endAngle: .degrees(segment.endAngle),
                             innerRadiusRatio: 0.55
                         )
                         .stroke(Color.white.opacity(0.38), lineWidth: 1.5)
                         .padding(5)
                     )
 
-                    WheelSegmentLabel(ingredient: ingredient)
+                    WheelSegmentLabel(ingredient: segment.ingredient)
                         .frame(width: 92)
-                        .rotationEffect(.degrees(labelRotation(for: midAngle)))
+                        .rotationEffect(.degrees(labelRotation(for: segment.midAngle)))
                         .offset(
-                            x: cos(midAngle * .pi / 180) * radius,
-                            y: sin(midAngle * .pi / 180) * radius
+                            x: cos(segment.midAngle * .pi / 180) * radius,
+                            y: sin(segment.midAngle * .pi / 180) * radius
                         )
                 }
 
@@ -899,25 +1247,113 @@ struct DishRollerView: View {
         )
     }
 
+    private func wheelSegments(
+        for ingredients: [Ingredient],
+        expiryFirst: Bool
+    ) -> [WeightedWheelSegment] {
+        guard !ingredients.isEmpty else { return [] }
+
+        let weights = ingredients.map {
+            expiryFirst ? expiryWeight(for: $0) : 1
+        }
+        let totalWeight = weights.reduce(0, +)
+        let arcSizes = weights.map { ($0 / totalWeight) * 360 }
+        var startAngle = -90 - ((arcSizes.first ?? 0) / 2)
+
+        return zip(ingredients, arcSizes).map { ingredient, arcSize in
+            defer { startAngle += arcSize }
+            return WeightedWheelSegment(
+                ingredient: ingredient,
+                startAngle: startAngle,
+                endAngle: startAngle + arcSize
+            )
+        }
+    }
+
+    private func recipeWheelSegments(for recipes: [Recipe]) -> [RecipeWheelSegment] {
+        guard !recipes.isEmpty else { return [] }
+
+        let arcSize = 360.0 / Double(recipes.count)
+        var startAngle = -90 - (arcSize / 2)
+
+        return recipes.map { recipe in
+            defer { startAngle += arcSize }
+            return RecipeWheelSegment(
+                recipe: recipe,
+                startAngle: startAngle,
+                endAngle: startAngle + arcSize
+            )
+        }
+    }
+
+    private func expiryWeight(for ingredient: Ingredient) -> Double {
+        guard let expiryDate = ingredient.expiryDate else { return 1 }
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let expiryDay = calendar.startOfDay(for: expiryDate)
+        let days = calendar.dateComponents([.day], from: today, to: expiryDay).day ?? 30
+
+        switch days {
+        case ...0: return 4
+        case 1: return 3.5
+        case 2: return 3
+        case 3: return 2.6
+        case 4: return 2.2
+        case 5: return 2
+        case 6: return 1.8
+        case 7: return 1.6
+        case 8...14: return 1.3
+        default: return 1
+        }
+    }
+
+    private func angle(_ angle: Double, isWithinStart start: Double, end: Double) -> Bool {
+        let offsetFromStart = normalizedDegrees(angle - start)
+        return offsetFromStart < (end - start)
+    }
+
+    private func recipeSelection(from recipes: [Recipe]) -> Recipe? {
+        guard !recipes.isEmpty else { return nil }
+
+        let segments = recipeWheelSegments(for: recipes)
+        let localPointerAngle = normalizedDegrees(-90 - wheelRotation)
+
+        return segments.first { segment in
+            angle(localPointerAngle, isWithinStart: segment.startAngle, end: segment.endAngle)
+        }?.recipe ?? segments.last?.recipe
+    }
+
     private func toggleWheelSpin() {
         if isSpinning {
             isSpinning = false
             stopSpinTimer()
             remainingSpins = max(remainingSpins - 1, 0)
 
-            let stoppedWheelIngredients = wheelIngredients
-            if let selectedIngredient = wheelSelection(from: stoppedWheelIngredients) {
-                vm.addSelection(selectedIngredient)
+            if selectedMode == .dishes {
+                selectedDishRecipe = recipeSelection(from: wheelRecipes)
+            } else {
+                let stoppedWheelIngredients = wheelIngredients
+                if let selectedIngredient = wheelSelection(from: stoppedWheelIngredients) {
+                    vm.addSelection(selectedIngredient)
+                }
             }
 
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 activeControlPanel = .results
             }
         } else if remainingSpins > 0 {
-            let nextWheelIngredients = availableWheelIngredients
-            guard !nextWheelIngredients.isEmpty else { return }
+            if selectedMode == .dishes {
+                let nextWheelRecipes = appVM.savedRecipesVM.savedRecipes
+                guard !nextWheelRecipes.isEmpty else { return }
+                wheelRecipeSnapshot = nextWheelRecipes
+            } else {
+                let nextWheelIngredients = availableWheelIngredients
+                guard !nextWheelIngredients.isEmpty else { return }
+                wheelIngredientSnapshot = nextWheelIngredients
+                wheelExpiryModeSnapshot = isExpiredFirstEnabled
+            }
 
-            wheelIngredientSnapshot = nextWheelIngredients
             isSpinning = true
             startSpinTimer()
         }
@@ -942,6 +1378,24 @@ struct DishRollerView: View {
         remainingSpins = 3
         vm.clearResults()
         wheelIngredientSnapshot = []
+        wheelRecipeSnapshot = []
+        wheelExpiryModeSnapshot = nil
+        selectedDishRecipe = nil
+    }
+
+    private func switchMode(to mode: Mode) {
+        guard selectedMode != mode else { return }
+
+        stopSpinTimer()
+        isSpinning = false
+        selectedMode = mode
+        remainingSpins = 3
+        vm.clearResults()
+        wheelIngredientSnapshot = []
+        wheelRecipeSnapshot = []
+        wheelExpiryModeSnapshot = nil
+        selectedDishRecipe = nil
+        activeControlPanel = .selection
     }
 
     private func removeSelectedResult(_ ingredient: Ingredient) {
@@ -990,6 +1444,66 @@ struct DishRollerView: View {
         }
 
         return angle
+    }
+}
+
+private struct LocalSelectionMenu<Option: Hashable>: View {
+    let title: String
+    let options: [Option]
+    let label: KeyPath<Option, String>
+    let onSelection: (Option) -> Void
+
+    @State private var selection: Option
+
+    init(
+        title: String,
+        initialSelection: Option,
+        options: [Option],
+        label: KeyPath<Option, String>,
+        onSelection: @escaping (Option) -> Void
+    ) {
+        self.title = title
+        self.options = options
+        self.label = label
+        self.onSelection = onSelection
+        _selection = State(initialValue: initialSelection)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 18, weight: .black))
+                .foregroundColor(.black)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            Menu {
+                ForEach(options, id: \.self) { option in
+                    Button(option[keyPath: label]) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                            selection = option
+                            onSelection(option)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(selection[keyPath: label])
+                        .font(.subheadline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                }
+                .foregroundColor(.black)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .background(Color.white)
+                .clipShape(Capsule())
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1171,6 +1685,47 @@ struct WheelSegmentLabel: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color.white.opacity(0.58))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+}
+
+private struct RecipeWheelSegmentLabel: View {
+    let recipe: Recipe
+
+    var body: some View {
+        VStack(spacing: 7) {
+            Text(recipe.estimatedTime.uppercased())
+                .font(.caption2)
+                .fontWeight(.black)
+                .foregroundColor(.black)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    LinearGradient(
+                        colors: [.yellow, Color(red: 1.0, green: 0.84, blue: 0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.black, lineWidth: 1.4)
+                )
+
+            Text(recipe.title)
+                .font(.subheadline)
+                .fontWeight(.black)
+                .foregroundColor(.black)
+                .lineLimit(2)
+                .minimumScaleFactor(0.65)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(Color.white.opacity(0.72))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }

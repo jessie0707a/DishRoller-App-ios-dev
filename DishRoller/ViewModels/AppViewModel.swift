@@ -32,14 +32,28 @@ final class AppViewModel: ObservableObject {
     @Published var selectedTab: Int = 0
     @Published var currentRecipe: Recipe?
     @Published var currentRecipeContext: RecipeGenerationContext?
-    @Published private var todayMenuRecords: [DailyGeneratedRecipe] = []
+    @Published var isRecipeHistoryPresented = false
+    @Published private var generatedRecipeRecords: [DailyGeneratedRecipe] = []
 
     @Published var storageVM = StorageViewModel()
     @Published var savedRecipesVM = SavedRecipesViewModel()
     @Published var avoidanceVM = AvoidancePreferencesViewModel()
 
     var todayMenuRecipes: [Recipe] {
-        todayMenuRecords.map { syncedRecipeState(for: $0.recipe) }
+        generatedRecipeRecords
+            .filter { Calendar.current.isDateInToday($0.generatedAt) }
+            .map { syncedRecipeState(for: $0.recipe) }
+    }
+
+    var recipeHistory: [DailyGeneratedRecipe] {
+        generatedRecipeRecords
+            .sorted { $0.generatedAt > $1.generatedAt }
+            .map { record in
+                DailyGeneratedRecipe(
+                    recipe: syncedRecipeState(for: record.recipe),
+                    generatedAt: record.generatedAt
+                )
+            }
     }
 
     private let todayMenuKey = "dishroller.todayGeneratedMenus"
@@ -69,6 +83,11 @@ final class AppViewModel: ObservableObject {
         currentRecipeContext = nil
     }
 
+    func clearRecipeHistory() {
+        generatedRecipeRecords = []
+        persistGeneratedRecipes()
+    }
+
     func consumeRecipeIngredients(for recipe: Recipe) {
         for recipeIngredient in recipe.ingredients {
             guard let match = storageVM.ingredients.first(where: {
@@ -86,7 +105,7 @@ final class AppViewModel: ObservableObject {
         }
 
         let isSaved = savedRecipesVM.isSaved(recipe)
-        syncTodayMenuSavedState(for: recipe.id, isSaved: isSaved)
+        syncGeneratedRecipeSavedState(for: recipe.id, isSaved: isSaved)
 
         guard var updatedCurrentRecipe = currentRecipe, updatedCurrentRecipe.id == recipe.id else { return }
         updatedCurrentRecipe.isSaved = isSaved
@@ -114,44 +133,38 @@ final class AppViewModel: ObservableObject {
     }
 
     private func addTodayMenuRecipe(_ recipe: Recipe) {
-        pruneExpiredTodayMenus()
-        todayMenuRecords.removeAll { $0.id == recipe.id }
-        todayMenuRecords.insert(DailyGeneratedRecipe(recipe: recipe), at: 0)
-        persistTodayMenus()
+        generatedRecipeRecords.removeAll { $0.id == recipe.id }
+        generatedRecipeRecords.insert(DailyGeneratedRecipe(recipe: recipe), at: 0)
+        persistGeneratedRecipes()
     }
 
-    private func syncTodayMenuSavedState(for recipeID: UUID, isSaved: Bool) {
-        guard let index = todayMenuRecords.firstIndex(where: { $0.id == recipeID }) else { return }
-        todayMenuRecords[index].recipe.isSaved = isSaved
-        persistTodayMenus()
+    private func syncGeneratedRecipeSavedState(for recipeID: UUID, isSaved: Bool) {
+        guard let index = generatedRecipeRecords.firstIndex(where: { $0.id == recipeID }) else { return }
+        generatedRecipeRecords[index].recipe.isSaved = isSaved
+        persistGeneratedRecipes()
     }
 
     private func loadTodayMenus() {
         guard let data = UserDefaults.standard.data(forKey: todayMenuKey),
               let records = try? JSONDecoder().decode([DailyGeneratedRecipe].self, from: data)
         else {
-            todayMenuRecords = []
+            generatedRecipeRecords = []
             return
         }
 
-        todayMenuRecords = records
-            .filter { Calendar.current.isDateInToday($0.generatedAt) }
+        generatedRecipeRecords = records
             .map { record in
                 DailyGeneratedRecipe(
                     recipe: syncedRecipeState(for: record.recipe),
                     generatedAt: record.generatedAt
                 )
             }
-        persistTodayMenus()
+            .sorted { $0.generatedAt > $1.generatedAt }
+        persistGeneratedRecipes()
     }
 
-    private func pruneExpiredTodayMenus() {
-        todayMenuRecords = todayMenuRecords.filter { Calendar.current.isDateInToday($0.generatedAt) }
-        persistTodayMenus()
-    }
-
-    private func persistTodayMenus() {
-        guard let data = try? JSONEncoder().encode(todayMenuRecords) else { return }
+    private func persistGeneratedRecipes() {
+        guard let data = try? JSONEncoder().encode(generatedRecipeRecords) else { return }
         UserDefaults.standard.set(data, forKey: todayMenuKey)
     }
 

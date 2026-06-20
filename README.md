@@ -31,7 +31,7 @@ DishRoller is a SwiftUI iOS app that helps users turn available ingredients into
 ## Setup
 
 1. Open the project in Xcode.
-2. Copy `DishRoller/DishRoller/Config.example.plist` to `DishRoller/DishRoller/Config.plist`.
+2. Copy `DishRoller/Config.example.plist` to `DishRoller/Config.plist`.
 3. Replace `YOUR_GEMINI_API_KEY` with your Gemini API key.
 4. Keep `GEMINI_MODEL` as `gemini-2.5-flash-lite`, or change it to another supported Gemini model.
 5. Build and run the app from Xcode.
@@ -61,4 +61,6 @@ DishRoller/DishRoller
 
 ## Notes
 
-`Config.plist` should contain local secrets and should not be committed with a real API key.
+`Config.plist` is ignored by Git and is intended for local development only. Do not ship a
+production mobile app with a Gemini API key in its bundle; route production requests through a
+backend that stores the key in a secret manager.
