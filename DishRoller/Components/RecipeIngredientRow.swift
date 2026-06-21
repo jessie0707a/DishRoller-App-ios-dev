@@ -104,8 +104,8 @@ struct RecipeIngredientRow: View {
             minWidth: 44,
             maxWidth: 78,
             preservesFullText: false,
-            backgroundColor: Color.mint.opacity(0.55),
-            borderColor: Color.teal.opacity(0.35)
+            backgroundColor: Color(.systemGray5),
+            borderColor: Color.black.opacity(0.12)
         )
     }
 

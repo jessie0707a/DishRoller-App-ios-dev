@@ -381,8 +381,9 @@ private struct MarqueeRecipeTitle: View {
                 }
             } label: {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.title3.weight(.bold))
+                    .font(.system(size: 23, weight: .bold))
                     .foregroundColor(.black)
+                    .frame(width: 23, height: 23)
                     .frame(width: 72, height: 48)
                     .background(Color.yellow)
                     .clipShape(Capsule())
@@ -560,7 +561,6 @@ private struct MarqueeRecipeTitle: View {
             menuVM: vm,
             storageIngredients: appVM.storageVM.ingredients,
             generationContext: appVM.regenerationContext(for: recipe),
-            showsRating: appVM.currentRecipeContext != nil,
             onClose: {
                 appVM.dismissCurrentRecipe()
             }
@@ -634,7 +634,6 @@ private struct RecipeDetailSplitView: View {
     let menuVM: MenuViewModel
     let storageIngredients: [Ingredient]
     let generationContext: RecipeGenerationContext
-    let showsRating: Bool
     let onClose: () -> Void
 
     @State private var isExpanded = false
@@ -650,14 +649,12 @@ private struct RecipeDetailSplitView: View {
         menuVM: MenuViewModel,
         storageIngredients: [Ingredient],
         generationContext: RecipeGenerationContext,
-        showsRating: Bool,
         onClose: @escaping () -> Void
     ) {
         self.recipe = recipe
         self.menuVM = menuVM
         self.storageIngredients = storageIngredients
         self.generationContext = generationContext
-        self.showsRating = showsRating
         self.onClose = onClose
         _heroImageFileName = State(initialValue: recipe.imageFileName)
     }
@@ -768,10 +765,6 @@ private struct RecipeDetailSplitView: View {
                 }
             }
             }
-            .overlay {
-                RoundedRectangle(cornerRadius: 0)
-                    .stroke(Color.yellow.opacity(0.85), style: StrokeStyle(lineWidth: 3, dash: [9, 7]))
-            }
         }
         .buttonStyle(.plain)
         .id(heroImageRefreshID)
@@ -876,7 +869,6 @@ private struct RecipeDetailSplitView: View {
                     menuVM: menuVM,
                     storageIngredients: storageIngredients,
                     generationContext: generationContext,
-                    showsRating: showsRating,
                     onLeave: onClose
                 )
                 .environmentObject(appVM)
@@ -1340,10 +1332,8 @@ private struct RecipeCardView: View {
     let menuVM: MenuViewModel
     let storageIngredients: [Ingredient]
     let generationContext: RecipeGenerationContext
-    let showsRating: Bool
     let onLeave: () -> Void
 
-    @State private var recipeRating = 0
     @State private var sharePayload: RecipeSharePayload?
     @State private var editableTitle: String
     @FocusState private var isTitleFocused: Bool
@@ -1353,14 +1343,12 @@ private struct RecipeCardView: View {
         menuVM: MenuViewModel,
         storageIngredients: [Ingredient],
         generationContext: RecipeGenerationContext,
-        showsRating: Bool,
         onLeave: @escaping () -> Void
     ) {
         self.recipe = recipe
         self.menuVM = menuVM
         self.storageIngredients = storageIngredients
         self.generationContext = generationContext
-        self.showsRating = showsRating
         self.onLeave = onLeave
         _editableTitle = State(initialValue: recipe.title)
     }
@@ -1485,10 +1473,6 @@ private struct RecipeCardView: View {
 
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            if showsRating {
-                ratingSection
-            }
-
             Button {
                 appVM.consumeRecipeIngredients(for: displayedRecipe)
                 onLeave()
@@ -1558,35 +1542,6 @@ private struct RecipeCardView: View {
             .accessibilityLabel("Regenerate recipe from the same wheel results")
         }
         .padding(.top, 4)
-    }
-
-    private var ratingSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Do you like this recipe? Please rate it.")
-                .font(.headline.weight(.black))
-                .foregroundColor(.black)
-
-            HStack(spacing: 8) {
-                ForEach(1...5, id: \.self) { rating in
-                    Button {
-                        recipeRating = rating
-                    } label: {
-                        Image(systemName: rating <= recipeRating ? "star.fill" : "star")
-                            .font(.title2.weight(.black))
-                            .foregroundColor(.black)
-                            .frame(width: 38, height: 38)
-                            .background(rating <= recipeRating ? Color.white : Color.white.opacity(0.55))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Rate \(rating) stars")
-                }
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.48))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     @MainActor

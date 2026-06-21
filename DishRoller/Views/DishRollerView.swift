@@ -56,8 +56,7 @@ struct DishRollerView: View {
     @State private var isExpiredFirstEnabled = false
     @State private var magicPulse = false
     @State private var magicRotation = 0.0
-    @State private var storageNoticeMessage: String?
-    @State private var storageNoticeTask: Task<Void, Never>?
+    @State private var showPreferenceBasket = false
     @State private var activeControlPanel: ControlPanelTab = .selection
     @State private var controlPanelPage = 0
 
@@ -87,16 +86,7 @@ struct DishRollerView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .overlay(alignment: .top) {
-            if let storageNoticeMessage {
-                storageNoticeCard(message: storageNoticeMessage)
-                    .padding(.top, 88)
-                    .padding(.horizontal, 24)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
         .animation(.spring(response: 0.35, dampingFraction: 0.78), value: vm.isLoading)
-        .animation(.spring(response: 0.3, dampingFraction: 0.86), value: storageNoticeMessage)
         .alert("Notice", isPresented: Binding(
             get: { vm.errorMessage != nil },
             set: { _ in vm.errorMessage = nil }
@@ -104,6 +94,14 @@ struct DishRollerView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(vm.errorMessage ?? "")
+        }
+        .sheet(isPresented: $showPreferenceBasket) {
+            PreferenceBasketSheet(
+                vm: vm,
+                storageIngredients: appVM.storageVM.ingredients
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .onChange(of: vm.isLoading) { _, isLoading in
             updateMagicAnimation(isLoading: isLoading)
@@ -117,7 +115,6 @@ struct DishRollerView: View {
         }
         .onDisappear {
             stopSpinTimer()
-            storageNoticeTask?.cancel()
             updateMagicAnimation(isLoading: false)
         }
     }
@@ -136,16 +133,48 @@ struct DishRollerView: View {
                 AvoidancePreferencesView()
                     .environmentObject(appVM)
             } label: {
-                Image(systemName: "exclamationmark.circle.fill")
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(.black)
-                    .frame(width: 72, height: 48)
-                    .background(Color.yellow)
-                    .clipShape(Capsule())
+                ZStack(alignment: .trailing) {
+                    Image(systemName: "exclamationmark.circle")
+                        .font(.system(size: 23, weight: .bold))
+                        .foregroundColor(.black)
+                        .frame(width: 23, height: 23)
+                        .frame(width: 72, height: 48)
+
+                    if selectedAvoidanceCardCount > 0 {
+                        HStack {
+                            Text(selectedAvoidanceCountText)
+                                .font(.caption.weight(.black))
+                                .foregroundStyle(.yellow)
+                                .frame(width: 28, height: 28)
+                                .background(Color.black)
+                                .clipShape(Circle())
+                                .transition(.scale.combined(with: .opacity))
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.leading, 10)
+                    }
+                }
+                .frame(width: selectedAvoidanceCardCount > 0 ? 100 : 72, height: 48)
+                .background(Color.yellow)
+                .clipShape(Capsule())
+                .animation(
+                    .spring(response: 0.3, dampingFraction: 0.82),
+                    value: selectedAvoidanceCardCount
+                )
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Open Avoid Foods")
+            .accessibilityValue("\(selectedAvoidanceCardCount) active cards")
         }
+    }
+
+    private var selectedAvoidanceCardCount: Int {
+        appVM.avoidanceVM.selectedProfileCount
+    }
+
+    private var selectedAvoidanceCountText: String {
+        selectedAvoidanceCardCount > 99 ? "99+" : "\(selectedAvoidanceCardCount)"
     }
 
     private var pageBackground: Color {
@@ -374,8 +403,15 @@ struct DishRollerView: View {
                 )
 
                 HStack(spacing: 8) {
-                    preferenceCapsule
-                    addIngredientButton
+                    Text("Preference")
+                        .font(.system(size: 18, weight: .black))
+                        .foregroundColor(.black)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+
+                    Spacer(minLength: 0)
+
+                    preferenceBasketIcon
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -626,57 +662,36 @@ struct DishRollerView: View {
         .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
     }
 
-    private func storageNoticeCard(message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .fontWeight(.black)
-            .foregroundColor(.black)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
-    }
-
-    private var preferenceCapsule: some View {
-        TextField("Preferences", text: $vm.customPreferences)
-            .font(.subheadline)
-            .fontWeight(.semibold)
-            .foregroundColor(.black)
-            .lineLimit(1)
-            .textInputAutocapitalization(.sentences)
-            .disableAutocorrection(false)
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, minHeight: 40)
-            .background(Color.white)
-            .clipShape(Capsule())
-            .accessibilityLabel("Recipe preferences")
-            .submitLabel(.done)
-            .onSubmit {
-                addPreferredIngredient()
-                dismissKeyboard()
-            }
-    }
-
-    private var addIngredientButton: some View {
+    private var preferenceBasketIcon: some View {
         Button {
-            addPreferredIngredient()
+            showPreferenceBasket = true
         } label: {
-            Image(systemName: "plus")
-                .font(.title2.weight(.bold))
-                .foregroundColor(.black)
+            Group {
+                if vm.selectedResults.isEmpty {
+                    Image(systemName: "basket")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(.black)
+                } else {
+                    Text("\(vm.selectedResults.count)")
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(.yellow)
+                }
+            }
                 .frame(width: 40, height: 40)
-                .background(Color.yellow)
+                .background(vm.selectedResults.isEmpty ? Color.yellow : Color.black)
                 .clipShape(Circle())
                 .overlay(
                     Circle()
                         .stroke(Color.white, lineWidth: 1.5)
                 )
+                .animation(
+                    .spring(response: 0.28, dampingFraction: 0.8),
+                    value: vm.selectedResults.count
+                )
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open preference basket")
+        .accessibilityValue("\(vm.selectedResults.count) ingredients selected")
     }
 
     private var comboMoreMenu: some View {
@@ -771,7 +786,7 @@ struct DishRollerView: View {
                     time: vm.selectedTime,
                     type: vm.selectedType,
                     style: vm.selectedStyle,
-                    customPreferences: vm.customPreferences
+                    customPreferences: ""
                 )
                 if let recipe = await vm.generateRecipe(
                     avoidancePrompt: appVM.avoidanceVM.selectedAvoidancePrompt
@@ -810,25 +825,6 @@ struct DishRollerView: View {
                 )
         }
         .buttonStyle(.plain)
-    }
-
-    private func addPreferredIngredient() {
-        if vm.addPreferredIngredient(named: vm.customPreferences, from: appVM.storageVM.ingredients) {
-            vm.customPreferences = ""
-        } else {
-            showStorageNotice("sorry, it was out of storage")
-        }
-    }
-
-    private func showStorageNotice(_ message: String) {
-        storageNoticeTask?.cancel()
-        storageNoticeMessage = message
-
-        storageNoticeTask = Task {
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return }
-            storageNoticeMessage = nil
-        }
     }
 
     private var comboSelectionGroup: some View {
@@ -1614,6 +1610,154 @@ struct DishRollerView: View {
         }
 
         return angle
+    }
+}
+
+private struct PreferenceBasketSheet: View {
+    @ObservedObject var vm: DishRollerViewModel
+    let storageIngredients: [Ingredient]
+
+    private var availableIngredients: [Ingredient] {
+        var seenNames: Set<String> = []
+
+        return storageIngredients
+            .filter { $0.amount > 0 }
+            .sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+            .filter { ingredient in
+                let key = selectionKey(for: ingredient)
+                guard !seenNames.contains(key) else { return false }
+                seenNames.insert(key)
+                return true
+            }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Text("Preference Basket")
+                    .font(.system(size: 22, weight: .black))
+                    .foregroundStyle(.black)
+                    .padding(.top, 22)
+                    .padding(.bottom, 10)
+
+                HStack {
+                    Text("\(vm.selectedResults.count)/5 selected")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 12)
+                        .frame(height: 30)
+                        .background(Color.yellow)
+                        .clipShape(Capsule())
+
+                    Spacer()
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 8)
+
+                Group {
+                    if availableIngredients.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "basket")
+                                .font(.system(size: 42, weight: .black))
+                                .foregroundStyle(.gray)
+
+                            Text("No ingredients in Storage")
+                                .font(.headline.weight(.black))
+
+                            Text("Add food to Storage before using the preference basket.")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.gray)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(24)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List {
+                            Section {
+                                ForEach(availableIngredients) { ingredient in
+                                    preferenceRow(ingredient)
+                                        .listRowBackground(Color.white)
+                                }
+                            } header: {
+                                Text("Tap + to add an ingredient to Results. Tap − to remove it.")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.black.opacity(0.65))
+                                    .textCase(nil)
+                            }
+                        }
+                        .listStyle(.insetGrouped)
+                        .scrollContentBackground(.hidden)
+                    }
+                }
+            }
+            .background(Color(red: 0.96, green: 0.95, blue: 0.98))
+            .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    private func preferenceRow(_ ingredient: Ingredient) -> some View {
+        let selectedIngredient = selectedIngredient(matching: ingredient)
+        let isSelected = selectedIngredient != nil
+
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(ingredient.name)
+                    .font(.headline.weight(.black))
+                    .foregroundStyle(.black)
+
+                Text(ingredient.category.rawValue)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.gray)
+            }
+
+            Spacer()
+
+            dashedControl(systemName: "minus", isEnabled: isSelected) {
+                guard let selectedIngredient else { return }
+                vm.removeResult(selectedIngredient)
+            }
+
+            dashedControl(
+                systemName: "plus",
+                isEnabled: !isSelected && vm.selectedResults.count < 5
+            ) {
+                vm.addSelection(ingredient)
+            }
+        }
+        .padding(.vertical, 5)
+    }
+
+    private func dashedControl(
+        systemName: String,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.subheadline.weight(.black))
+                .foregroundStyle(isEnabled ? Color.black : Color.gray.opacity(0.45))
+                .frame(width: 38, height: 38)
+                .overlay(
+                    Circle()
+                        .stroke(
+                            isEnabled ? Color.black : Color.gray.opacity(0.35),
+                            style: StrokeStyle(lineWidth: 1.8, dash: [5, 4])
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+    }
+
+    private func selectedIngredient(matching ingredient: Ingredient) -> Ingredient? {
+        let key = selectionKey(for: ingredient)
+        return vm.selectedResults.first { selectionKey(for: $0) == key }
+    }
+
+    private func selectionKey(for ingredient: Ingredient) -> String {
+        ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
 

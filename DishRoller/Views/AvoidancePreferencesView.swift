@@ -12,6 +12,36 @@ struct AvoidancePreferencesView: View {
     var body: some View {
         List {
             Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("How avoid cards work")
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(.black)
+
+                    instructionStep(
+                        number: 1,
+                        text: "Name each card, then list every food you want to avoid."
+                    )
+
+                    instructionStep(
+                        number: 2,
+                        text: "Select a completed card and generated recipes will exclude those foods from their ingredients."
+                    )
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            Color.black.opacity(0.55),
+                            style: StrokeStyle(lineWidth: 2, dash: [7, 5])
+                        )
+                )
+                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+            }
+
+            Section {
                 Button {
                     appVM.avoidanceVM.addProfile()
                 } label: {
@@ -56,6 +86,22 @@ struct AvoidancePreferencesView: View {
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .top, spacing: 0) {
             avoidancePageHeader
+        }
+    }
+
+    private func instructionStep(number: Int, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text("\(number)")
+                .font(.caption.weight(.black))
+                .foregroundStyle(.yellow)
+                .frame(width: 24, height: 24)
+                .background(Color.black)
+                .clipShape(Circle())
+
+            Text(text)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.black.opacity(0.72))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -110,16 +156,29 @@ private struct AvoidanceProfileCard: View {
     let onNameChange: (String) -> Void
     let onFoodsChange: (String) -> Void
 
+    private var canSelect: Bool {
+        !profile.avoidFoods.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 Button(action: onToggle) {
                     Image(systemName: profile.isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.title2.weight(.bold))
-                        .foregroundColor(profile.isSelected ? .yellow : .gray)
+                        .foregroundColor(
+                            profile.isSelected
+                                ? .yellow
+                                : canSelect ? .gray : Color(.systemGray4)
+                        )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(profile.isSelected ? "Selected" : "Not selected")
+                .disabled(!canSelect)
+                .accessibilityLabel(
+                    canSelect
+                        ? profile.isSelected ? "Selected" : "Not selected"
+                        : "Add foods before selecting this avoid card"
+                )
 
                 VStack(alignment: .leading, spacing: 6) {
                     TextField(
@@ -148,6 +207,12 @@ private struct AvoidanceProfileCard: View {
                     .textInputAutocapitalization(.sentences)
                     .submitLabel(.done)
                     .onSubmit(dismissKeyboard)
+
+                    if !canSelect {
+                        Text("Enter foods to enable this card")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.gray)
+                    }
                 }
             }
         }

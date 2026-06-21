@@ -13,7 +13,6 @@ final class DishRollerViewModel: ObservableObject {
     var selectedTime: CookingTime = .fifteen
     var selectedType: DishType = .mainCourse
     var selectedStyle: FlavourStyle = .chinese
-    @Published var customPreferences = ""
 
     @Published var selectedResults: [Ingredient] = []
     @Published var isLoading = false
@@ -63,20 +62,6 @@ final class DishRollerViewModel: ObservableObject {
         selectedResults.append(ingredient)
     }
 
-    func addPreferredIngredient(named name: String, from ingredients: [Ingredient]) -> Bool {
-        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanName.isEmpty else { return false }
-
-        guard let matchedIngredient = selectableIngredients(from: ingredients).first(where: {
-            IngredientNameMatcher.matches(storageName: $0.name, recipeName: cleanName)
-        }) else {
-            return false
-        }
-
-        addSelection(matchedIngredient)
-        return true
-    }
-
     func removeResult(_ ingredient: Ingredient) {
         selectedResults.removeAll { $0.id == ingredient.id }
     }
@@ -112,7 +97,7 @@ final class DishRollerViewModel: ObservableObject {
                 time: selectedTime,
                 type: selectedType,
                 style: selectedStyle,
-                customPreferences: customPreferences,
+                customPreferences: "",
                 avoidancePrompt: avoidancePrompt
             )
             isLoading = false

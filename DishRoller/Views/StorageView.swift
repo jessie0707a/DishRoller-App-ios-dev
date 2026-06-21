@@ -207,14 +207,47 @@ struct StorageView: View {
             NavigationLink {
                 OnlineShoppingView(storageVM: appVM.storageVM)
             } label: {
-                Image(systemName: "cart")
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(.black)
-                    .frame(width: 72, height: 48)
-                    .background(Color.yellow)
-                    .clipShape(Capsule())
+                ZStack(alignment: .trailing) {
+                    Image(systemName: "cart")
+                        .font(.system(size: 23, weight: .bold))
+                        .foregroundColor(.black)
+                        .frame(width: 23, height: 23)
+                        .frame(width: 72, height: 48)
+
+                    if shoppingCartItemCount > 0 {
+                        HStack {
+                            Text(shoppingCartCountText)
+                                .font(.caption.weight(.black))
+                                .foregroundStyle(.yellow)
+                                .frame(width: 28, height: 28)
+                                .background(Color.black)
+                                .clipShape(Circle())
+                                .transition(.scale.combined(with: .opacity))
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.leading, 10)
+                    }
+                }
+                .frame(width: shoppingCartItemCount > 0 ? 100 : 72, height: 48)
+                .background(Color.yellow)
+                .clipShape(Capsule())
+                .animation(
+                    .spring(response: 0.3, dampingFraction: 0.82),
+                    value: shoppingCartItemCount
+                )
             }
+            .accessibilityLabel("Shopping Cart")
+            .accessibilityValue("\(shoppingCartItemCount) items")
         }
+    }
+
+    private var shoppingCartItemCount: Int {
+        appVM.storageVM.shoppingListItems.count
+    }
+
+    private var shoppingCartCountText: String {
+        shoppingCartItemCount > 99 ? "99+" : "\(shoppingCartItemCount)"
     }
 
     private var searchPanel: some View {

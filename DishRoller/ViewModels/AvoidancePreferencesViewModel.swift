@@ -26,6 +26,13 @@ final class AvoidancePreferencesViewModel: ObservableObject {
             .joined(separator: "; ")
     }
 
+    var selectedProfileCount: Int {
+        profiles.filter {
+            $0.isSelected
+                && !$0.avoidFoods.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+    }
+
     func addProfile() {
         profiles.insert(AvoidanceProfile(), at: 0)
         persist()
@@ -36,10 +43,17 @@ final class AvoidancePreferencesViewModel: ObservableObject {
     }
 
     func updateAvoidFoods(for profile: AvoidanceProfile, avoidFoods: String) {
-        update(profile) { $0.avoidFoods = avoidFoods }
+        update(profile) {
+            $0.avoidFoods = avoidFoods
+            if avoidFoods.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                $0.isSelected = false
+            }
+        }
     }
 
     func toggleSelection(for profile: AvoidanceProfile) {
+        let foods = profile.avoidFoods.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !foods.isEmpty else { return }
         update(profile) { $0.isSelected.toggle() }
     }
 
