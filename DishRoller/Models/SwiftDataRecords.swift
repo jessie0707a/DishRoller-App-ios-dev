@@ -16,6 +16,7 @@ final class StoredIngredientRecord {
     var iconName: String?
     var imageData: Data?
     var expiryDate: Date?
+    var createdAt: Date?
     var orderIndex: Int
 
     init(ingredient: Ingredient, orderIndex: Int) {
@@ -27,6 +28,7 @@ final class StoredIngredientRecord {
         self.iconName = ingredient.iconName
         self.imageData = ingredient.imageData
         self.expiryDate = ingredient.expiryDate
+        self.createdAt = ingredient.createdAt
         self.orderIndex = orderIndex
     }
 
@@ -38,6 +40,7 @@ final class StoredIngredientRecord {
         iconName = ingredient.iconName
         imageData = ingredient.imageData
         expiryDate = ingredient.expiryDate
+        createdAt = ingredient.createdAt
         self.orderIndex = orderIndex
     }
 
@@ -50,7 +53,8 @@ final class StoredIngredientRecord {
             unit: UnitType(rawValue: unitRawValue) ?? .pcs,
             iconName: iconName,
             imageData: imageData,
-            expiryDate: expiryDate
+            expiryDate: expiryDate,
+            createdAt: createdAt
         )
     }
 }

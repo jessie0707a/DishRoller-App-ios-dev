@@ -27,65 +27,77 @@ struct StorageView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    header
-                    searchPanel
-                    categoryFilters
+            ZStack(alignment: .bottomTrailing) {
+                storageBackground
+                    .ignoresSafeArea()
 
-                    LazyVGrid(columns: gridColumns, spacing: 14) {
-                        ForEach(appVM.storageVM.filteredIngredients) { ingredient in
-                            IngredientCardView(
-                                ingredient: ingredient,
-                                isSelected: selectedIngredientID == ingredient.id,
-                                onEdit: {
-                                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                                        editorContext = IngredientEditorContext(ingredientID: ingredient.id)
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        header
+                        searchPanel
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .padding(.bottom, 12)
+                    .background(storageBackground)
+
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            categoryFilters
+
+                            LazyVGrid(columns: gridColumns, spacing: 14) {
+                                ForEach(appVM.storageVM.filteredIngredients) { ingredient in
+                                    IngredientCardView(
+                                        ingredient: ingredient,
+                                        isSelected: selectedIngredientID == ingredient.id,
+                                        onEdit: {
+                                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                                                editorContext = IngredientEditorContext(ingredientID: ingredient.id)
+                                            }
+                                        }
+                                    )
+                                    .background {
+                                        if selectedIngredientID == ingredient.id {
+                                            GeometryReader { proxy in
+                                                Color.clear.preference(
+                                                    key: SelectedIngredientCardFrameKey.self,
+                                                    value: proxy.frame(in: .named("storageScreenSpace"))
+                                                )
+                                            }
+                                        }
                                     }
-                                }
-                            )
-                            .background {
-                                if selectedIngredientID == ingredient.id {
-                                    GeometryReader { proxy in
-                                        Color.clear.preference(
-                                            key: SelectedIngredientCardFrameKey.self,
-                                            value: proxy.frame(in: .named("storageScreenSpace"))
-                                        )
+                                    .contentShape(RoundedRectangle(cornerRadius: 22))
+                                    .onTapGesture {
+                                        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                                            selectedIngredientID = ingredient.id
+                                        }
+                                    }
+                                    .onLongPressGesture {
+                                        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                                            selectedIngredientID = ingredient.id
+                                        }
+
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                            pendingDeleteIngredient = ingredient
+                                        }
                                     }
                                 }
                             }
-                            .contentShape(RoundedRectangle(cornerRadius: 22))
-                            .onTapGesture {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-                                    selectedIngredientID = ingredient.id
-                                }
-                            }
-                            .onLongPressGesture {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-                                    selectedIngredientID = ingredient.id
-                                }
 
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                    pendingDeleteIngredient = ingredient
-                                }
+                            if appVM.storageVM.filteredIngredients.isEmpty {
+                                emptyState
                             }
                         }
+                        .padding(.horizontal, 18)
+                        .padding(.top, 6)
+                        .padding(.bottom, 220)
                     }
-
-                    if appVM.storageVM.filteredIngredients.isEmpty {
-                        emptyState
-                    }
+                    .scrollDismissesKeyboard(.interactively)
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 18)
-                .padding(.bottom, 92)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .toolbar(.hidden, for: .navigationBar)
-            .background(storageBackground)
-            .overlay(alignment: .bottomTrailing) {
+
                 addFoodButton
             }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .coordinateSpace(name: "storageScreenSpace")
         .onPreferenceChange(SelectedIngredientCardFrameKey.self) {
@@ -487,7 +499,46 @@ private struct IngredientPurchaseEditorOverlay: View {
                                 .tag(Optional(record.id))
                             }
                         }
-                        .tabViewStyle(.page(indexDisplayMode: purchaseRecords.count > 1 ? .automatic : .never))
+                        .tabViewStyle(.page(indexDisplayMode: .never))
+                        .overlay {
+                            GeometryReader { proxy in
+                                if purchaseRecords.count > 1 {
+                                    let cardHeight = min(proxy.size.height - 44, 626)
+                                    let cardBottomInset = max(0, (proxy.size.height - cardHeight) / 2)
+
+                                    VStack {
+                                        Spacer()
+
+                                        HStack(spacing: 6) {
+                                            ForEach(purchaseRecords) { record in
+                                                Capsule()
+                                                    .fill(
+                                                        selectedRecordID == record.id
+                                                            ? Color.black
+                                                            : Color.black.opacity(0.18)
+                                                    )
+                                                    .frame(
+                                                        width: selectedRecordID == record.id ? 18 : 6,
+                                                        height: 6
+                                                    )
+                                            }
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .frame(height: 28)
+                                        .background(Color.white.opacity(0.94))
+                                        .clipShape(Capsule())
+                                        .shadow(color: .black.opacity(0.1), radius: 5, y: 2)
+                                        .padding(.bottom, cardBottomInset + 8)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .allowsHitTesting(false)
+                                    .animation(
+                                        .spring(response: 0.28, dampingFraction: 0.82),
+                                        value: selectedRecordID
+                                    )
+                                }
+                            }
+                        }
                         .onAppear {
                             if selectedRecordID == nil {
                                 selectedRecordID = initialIngredient.id
@@ -537,7 +588,7 @@ private struct PurchaseRecordEditorPage: View {
     @State private var amountText: String
     @State private var itemNameText: String
     @State private var selectedUnit: UnitType
-    @State private var expiryDate: Date
+    @State private var expiryDate: Date?
     @State private var quantityEditMode: QuantityEditMode?
     @State private var originalAmountBeforeQuantityEdit: Double
     @State private var showDeleteConfirmation = false
@@ -547,7 +598,9 @@ private struct PurchaseRecordEditorPage: View {
     @State private var showPhotoSourceOptions = false
     @State private var imagePickerSource: StorageImagePickerSource?
     @State private var showCameraUnavailable = false
+    @State private var isEstimatingExpiry = false
     @FocusState private var focusedControl: EditorControl?
+    private let expiryEstimator = GeminiRecipeService()
 
     init(
         ingredient: Ingredient,
@@ -564,7 +617,7 @@ private struct PurchaseRecordEditorPage: View {
         _amountText = State(initialValue: Self.formattedAmount(ingredient.amount))
         _itemNameText = State(initialValue: ingredient.name)
         _selectedUnit = State(initialValue: ingredient.unit)
-        _expiryDate = State(initialValue: ingredient.expiryDate ?? Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date())
+        _expiryDate = State(initialValue: ingredient.expiryDate)
         _originalAmountBeforeQuantityEdit = State(initialValue: ingredient.amount)
         _editedImageData = State(initialValue: ingredient.imageData)
     }
@@ -582,16 +635,6 @@ private struct PurchaseRecordEditorPage: View {
                     showPhotoSourceOptions = true
                 } label: {
                     editorImage(for: ingredient, imageData: editedImageData)
-                        .overlay(alignment: .bottomTrailing) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 14, weight: .black))
-                                .foregroundStyle(.black)
-                                .frame(width: 36, height: 36)
-                                .background(Color.yellow)
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.black, lineWidth: 2))
-                                .offset(x: -26, y: -4)
-                        }
                         .overlay {
                             Circle()
                                 .stroke(Color.yellow, style: StrokeStyle(lineWidth: 3, dash: [7, 5]))
@@ -649,15 +692,24 @@ private struct PurchaseRecordEditorPage: View {
                     }
                 }
 
-                expiryEditor(
-                    title: "Expired Date:",
-                    expiryDate: $expiryDate,
-                    isActive: isControlActive(.expiryDate),
-                    onSelect: {
-                        activeControl = .expiryDate
-                        focusedControl = nil
-                    }
-                )
+                HStack(alignment: .bottom, spacing: 10) {
+                    expiryEditor(
+                        title: "Expired Date:",
+                        expiryDate: $expiryDate,
+                        width: 170,
+                        isActive: isControlActive(.expiryDate),
+                        onSelect: {
+                            activeControl = .expiryDate
+                            focusedControl = nil
+                        }
+                    )
+
+                    aiExpiryEstimateButton(
+                        isLoading: isEstimatingExpiry,
+                        action: estimateExpiryDate
+                    )
+                }
+                .frame(width: 224)
 
                 Button {
                     saveChanges()
@@ -689,6 +741,15 @@ private struct PurchaseRecordEditorPage: View {
                 activeControl = newValue
             }
         }
+        .overlay(alignment: .top) {
+            if isEstimatingExpiry {
+                aiExpiryLoadingNotice
+                    .padding(.top, 18)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(30)
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.84), value: isEstimatingExpiry)
         .fullScreenCover(item: $imagePickerSource) { source in
             StorageImagePicker(sourceType: source.uiSourceType) { image in
                 editedImageData = image.jpegData(compressionQuality: 0.7)
@@ -901,6 +962,29 @@ private struct PurchaseRecordEditorPage: View {
         onFinished()
     }
 
+    private func estimateExpiryDate() {
+        let cleanName = itemNameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else {
+            validationMessage = "Enter the food name before using AI estimation."
+            return
+        }
+
+        focusedControl = nil
+        isEstimatingExpiry = true
+        Task {
+            do {
+                expiryDate = try await expiryEstimator.estimateExpiryDate(
+                    itemName: cleanName,
+                    purchaseDate: ingredient.createdAt ?? Date()
+                )
+                activeControl = .expiryDate
+            } catch {
+                validationMessage = error.localizedDescription
+            }
+            isEstimatingExpiry = false
+        }
+    }
+
     private static func formattedAmount(_ value: Double) -> String {
         value.truncatingRemainder(dividingBy: 1) == 0
         ? String(Int(value))
@@ -917,10 +1001,13 @@ private struct NewPurchaseRecordPage: View {
     @State private var amountText = ""
     @State private var itemNameText: String
     @State private var selectedUnit: UnitType
-    @State private var expiryDate = Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
+    @State private var expiryDate: Date?
     @State private var validationMessage: String?
     @State private var activeControl: EditorControl?
+    @State private var isEstimatingExpiry = false
     @FocusState private var focusedControl: EditorControl?
+    private let purchaseDate = Date()
+    private let expiryEstimator = GeminiRecipeService()
 
     init(
         templateIngredient: Ingredient,
@@ -1004,15 +1091,24 @@ private struct NewPurchaseRecordPage: View {
                     }
                 }
 
-                expiryEditor(
-                    title: "Expired Date:",
-                    expiryDate: $expiryDate,
-                    isActive: isControlActive(.expiryDate),
-                    onSelect: {
-                        activeControl = .expiryDate
-                        focusedControl = nil
-                    }
-                )
+                HStack(alignment: .bottom, spacing: 10) {
+                    expiryEditor(
+                        title: "Expired Date:",
+                        expiryDate: $expiryDate,
+                        width: 170,
+                        isActive: isControlActive(.expiryDate),
+                        onSelect: {
+                            activeControl = .expiryDate
+                            focusedControl = nil
+                        }
+                    )
+
+                    aiExpiryEstimateButton(
+                        isLoading: isEstimatingExpiry,
+                        action: estimateExpiryDate
+                    )
+                }
+                .frame(width: 224)
 
                 Button {
                     createRecord()
@@ -1036,6 +1132,15 @@ private struct NewPurchaseRecordPage: View {
                 activeControl = newValue
             }
         }
+        .overlay(alignment: .top) {
+            if isEstimatingExpiry {
+                aiExpiryLoadingNotice
+                    .padding(.top, 18)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(30)
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.84), value: isEstimatingExpiry)
         .alert("Check item details", isPresented: Binding(
             get: { validationMessage != nil },
             set: { _ in validationMessage = nil }
@@ -1078,12 +1183,36 @@ private struct NewPurchaseRecordPage: View {
             unit: selectedUnit,
             iconName: templateIngredient.iconName ?? templateIngredient.category.foodIconAssetName,
             imageData: templateIngredient.imageData,
-            expiryDate: expiryDate
+            expiryDate: expiryDate,
+            createdAt: purchaseDate
         ) else {
             validationMessage = "Please enter valid item details."
             return
         }
         onCreated(newRecord)
+    }
+
+    private func estimateExpiryDate() {
+        let cleanName = itemNameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else {
+            validationMessage = "Enter the food name before using AI estimation."
+            return
+        }
+
+        focusedControl = nil
+        isEstimatingExpiry = true
+        Task {
+            do {
+                expiryDate = try await expiryEstimator.estimateExpiryDate(
+                    itemName: cleanName,
+                    purchaseDate: purchaseDate
+                )
+                activeControl = .expiryDate
+            } catch {
+                validationMessage = error.localizedDescription
+            }
+            isEstimatingExpiry = false
+        }
     }
 }
 
@@ -1126,7 +1255,7 @@ private struct PurchaseEditorCard<Content: View>: View {
 
 private func editorHeader(
     category: IngredientCategory,
-    expiryDate: Date,
+    expiryDate: Date?,
     onDelete: (() -> Void)? = nil
 ) -> some View {
     HStack(alignment: .center) {
@@ -1138,14 +1267,22 @@ private func editorHeader(
             .padding(.horizontal, 14)
             .frame(minWidth: 104)
             .frame(height: 40)
-            .background(daysUntilExpiry(for: expiryDate) < 0 ? Color(.systemGray4) : Color.yellow)
+            .background(
+                expiryDate.map { daysUntilExpiry(for: $0) < 0 } == true
+                    ? Color(.systemGray4)
+                    : Color.yellow
+            )
             .clipShape(Capsule())
 
         Spacer()
 
-        Text(expiryStatusText(for: expiryDate))
+        Text(expiryDate.map { expiryStatusText(for: $0) } ?? "No Date")
             .font(.system(size: 18, weight: .black))
-            .foregroundColor(daysUntilExpiry(for: expiryDate) <= 1 ? Color(red: 0.89, green: 0.22, blue: 0.2) : .black)
+            .foregroundColor(
+                expiryDate.map { daysUntilExpiry(for: $0) <= 1 } == true
+                    ? Color(red: 0.89, green: 0.22, blue: 0.2)
+                    : .black
+            )
             .lineLimit(1)
             .minimumScaleFactor(0.65)
 
@@ -1167,7 +1304,7 @@ private func editorHeader(
 private func editorImage(for ingredient: Ingredient, imageData: Data? = nil) -> some View {
     ZStack {
         Circle()
-            .fill(Color(red: 0.95, green: 0.72, blue: 0.72).opacity(0.45))
+            .fill(editorCategoryTint(for: ingredient.category).opacity(0.18))
             .frame(width: 152, height: 152)
 
         if let imageData = imageData ?? ingredient.imageData,
@@ -1185,6 +1322,21 @@ private func editorImage(for ingredient: Ingredient, imageData: Data? = nil) -> 
         }
     }
     .frame(maxWidth: .infinity)
+}
+
+private func editorCategoryTint(for category: IngredientCategory) -> Color {
+    switch category {
+    case .meat:
+        Color(red: 0.89, green: 0.25, blue: 0.22)
+    case .veg:
+        Color(red: 0.16, green: 0.56, blue: 0.28)
+    case .seafood:
+        Color(red: 0.12, green: 0.45, blue: 0.82)
+    case .drink:
+        Color(red: 0.46, green: 0.36, blue: 0.88)
+    case .condiment:
+        Color(red: 0.86, green: 0.55, blue: 0.04)
+    }
 }
 
 private func quantityButton(
@@ -1206,7 +1358,8 @@ private func quantityButton(
 
 private func expiryEditor(
     title: String,
-    expiryDate: Binding<Date>,
+    expiryDate: Binding<Date?>,
+    width: CGFloat = 224,
     isActive: Bool = false,
     onSelect: (() -> Void)? = nil
 ) -> some View {
@@ -1215,16 +1368,86 @@ private func expiryEditor(
             .font(.system(size: 15, weight: .black))
             .foregroundColor(.gray)
 
-        DatePicker("", selection: expiryDate, displayedComponents: .date)
+        if expiryDate.wrappedValue == nil {
+            Button {
+                expiryDate.wrappedValue = Date()
+                onSelect?()
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "calendar.badge.plus")
+                    Text("Add Date")
+                }
+                .font(.system(size: 14, weight: .black))
+                .foregroundStyle(.gray)
+                .frame(width: width, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .editorInputStyle(width: width, height: 44, isActive: isActive)
+        } else {
+            DatePicker(
+                "",
+                selection: Binding(
+                    get: { expiryDate.wrappedValue ?? Date() },
+                    set: { expiryDate.wrappedValue = $0 }
+                ),
+                displayedComponents: .date
+            )
             .labelsHidden()
             .datePickerStyle(.compact)
             .frame(height: 44)
-            .editorInputStyle(maxWidth: 224, height: 44, isActive: isActive)
+            .editorInputStyle(width: width, height: 44, isActive: isActive)
             .simultaneousGesture(TapGesture().onEnded {
                 onSelect?()
             })
+        }
     }
-    .frame(maxWidth: 224, alignment: .leading)
+    .frame(width: width, alignment: .leading)
+}
+
+private func aiExpiryEstimateButton(
+    isLoading: Bool,
+    action: @escaping () -> Void
+) -> some View {
+    Button(action: action) {
+        Image(systemName: "sparkles")
+            .font(.system(size: 16, weight: .black))
+            .foregroundStyle(.black)
+            .frame(width: 44, height: 44)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 1.0, green: 0.95, blue: 0.62),
+                        Color.yellow
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .clipShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .disabled(isLoading)
+    .opacity(isLoading ? 0.68 : 1)
+    .accessibilityLabel("AI estimated expiry date")
+}
+
+private var aiExpiryLoadingNotice: some View {
+    HStack(spacing: 10) {
+        ProgressView()
+            .tint(.yellow)
+
+        Text("DishRoller is estimating the expired date for you")
+            .font(.subheadline.weight(.black))
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.leading)
+    }
+    .padding(.horizontal, 16)
+    .frame(minHeight: 48)
+    .background(Color.black.opacity(0.94))
+    .clipShape(Capsule())
+    .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
+    .padding(.horizontal, 22)
 }
 
 private func step(for unit: UnitType) -> Double {
@@ -1289,7 +1512,10 @@ private extension View {
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(isActive ? Color.yellow : Color.black, lineWidth: isActive ? 4 : 2)
+                    .stroke(
+                        isActive ? Color.yellow : Color(.systemGray4),
+                        lineWidth: isActive ? 3 : 1.5
+                    )
             )
             .shadow(color: isActive ? Color.yellow.opacity(0.34) : Color.clear, radius: 8, y: 2)
             .animation(.easeInOut(duration: 0.16), value: isActive)
@@ -1327,12 +1553,15 @@ private struct AddFoodItemSheet: View {
     @State private var quantityText = ""
     @State private var selectedUnit: UnitType = .g
     @State private var selectedIconName = IngredientCategory.meat.foodIconAssetName
-    @State private var expiryDate = Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
+    @State private var expiryDate: Date?
     @State private var capturedImageData: Data?
     @State private var showPhotoSourceOptions = false
     @State private var imagePickerSource: StorageImagePickerSource?
     @State private var showCameraUnavailable = false
     @State private var validationMessage: String?
+    @State private var isEstimatingExpiry = false
+    private let purchaseDate = Date()
+    private let expiryEstimator = GeminiRecipeService()
 
     private let defaultIcons = [
         IngredientCategory.veg.foodIconAssetName,
@@ -1414,19 +1643,47 @@ private struct AddFoodItemSheet: View {
                     }
 
                     labeledField("Expiry Date") {
-                        DatePicker(
-                            "Expiry Date",
-                            selection: $expiryDate,
-                            displayedComponents: .date
-                        )
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                        .padding(.horizontal, 16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: 54)
-                        .background(Color(.systemGray6))
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(fieldStroke)
+                        HStack(spacing: 10) {
+                            Group {
+                                if expiryDate == nil {
+                                    Button {
+                                        expiryDate = Date()
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "calendar.badge.plus")
+                                            Text("Add Date")
+                                        }
+                                        .font(.headline)
+                                        .foregroundStyle(.gray)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .buttonStyle(.plain)
+                                } else {
+                                    DatePicker(
+                                        "Expiry Date",
+                                        selection: Binding(
+                                            get: { expiryDate ?? Date() },
+                                            set: { expiryDate = $0 }
+                                        ),
+                                        displayedComponents: .date
+                                    )
+                                    .datePickerStyle(.compact)
+                                    .labelsHidden()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(fieldStroke)
+
+                            aiExpiryEstimateButton(
+                                isLoading: isEstimatingExpiry,
+                                action: estimateExpiryDate
+                            )
+                        }
                     }
 
                     actionButtons
@@ -1469,6 +1726,15 @@ private struct AddFoodItemSheet: View {
         } message: {
             Text("This device cannot open the camera right now.")
         }
+        .overlay(alignment: .top) {
+            if isEstimatingExpiry {
+                aiExpiryLoadingNotice
+                    .padding(.top, 18)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(30)
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.84), value: isEstimatingExpiry)
         .alert("Check item details", isPresented: Binding(
             get: { validationMessage != nil },
             set: { _ in validationMessage = nil }
@@ -1644,9 +1910,32 @@ private struct AddFoodItemSheet: View {
             unit: selectedUnit,
             iconName: capturedImageData == nil ? selectedIconName : nil,
             imageData: capturedImageData,
-            expiryDate: expiryDate
+            expiryDate: expiryDate,
+            createdAt: purchaseDate
         )
         dismiss()
+    }
+
+    private func estimateExpiryDate() {
+        let cleanName = foodName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else {
+            validationMessage = "Enter the food name before using AI estimation."
+            return
+        }
+
+        dismissKeyboard()
+        isEstimatingExpiry = true
+        Task {
+            do {
+                expiryDate = try await expiryEstimator.estimateExpiryDate(
+                    itemName: cleanName,
+                    purchaseDate: purchaseDate
+                )
+            } catch {
+                validationMessage = error.localizedDescription
+            }
+            isEstimatingExpiry = false
+        }
     }
 }
 

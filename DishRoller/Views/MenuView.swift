@@ -102,9 +102,7 @@ struct MenuView: View {
     private var todayRecipesSection: some View {
         let recipes = appVM.todayMenuRecipes
 
-        return VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Today’s Recipes", showsMoreButton: false)
-
+        return VStack(alignment: .leading, spacing: 0) {
             if recipes.isEmpty {
                 todayEmptyRecipePlaceholder
             } else {
@@ -131,47 +129,30 @@ struct MenuView: View {
             .foregroundStyle(Color.gray)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 24)
-            .frame(maxWidth: .infinity, minHeight: 174, maxHeight: 174)
+            .frame(maxWidth: .infinity, minHeight: 224, maxHeight: 224)
             .background(Color.gray.opacity(0.06))
             .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .strokeBorder(
                         Color.gray.opacity(0.65),
                         style: StrokeStyle(lineWidth: 2, dash: [8, 7])
                     )
             }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
-        .frame(height: 178)
+        .frame(height: 224)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No recipe generated today. Generate from DishRoller to add a recipe here.")
     }
 
     private func todayRecipeCarousel(_ recipes: [Recipe]) -> some View {
-        let visibleIndices = Array(
-            selectedTodayRecipeIndex..<min(selectedTodayRecipeIndex + 3, recipes.count)
-        )
-
-        return VStack(spacing: 10) {
-            ZStack {
-                ForEach(visibleIndices.reversed(), id: \.self) { index in
-                    let depth = index - selectedTodayRecipeIndex
-                    let sideOffset: CGFloat = depth == 1 ? 16 : (depth == 2 ? -16 : 0)
-
-                    todayRecipeCard(recipes[index])
-                        .offset(
-                            x: sideOffset + (depth == 0 ? todayCarouselDrag : 0),
-                            y: 0
-                        )
-                        .opacity(1 - (Double(depth) * 0.16))
-                        .zIndex(Double(3 - depth))
-                        .allowsHitTesting(depth == 0)
-                }
-            }
-            .frame(height: 178)
-            .padding(.horizontal, recipes.count > 1 ? 18 : 0)
-            .contentShape(Rectangle())
-            .gesture(todayCarouselGesture(recipeCount: recipes.count))
+        return VStack(spacing: 8) {
+            todayRecipeCard(recipes[selectedTodayRecipeIndex], enablesMarquee: true)
+                .offset(x: todayCarouselDrag)
+                .frame(maxWidth: .infinity)
+                .frame(height: 224)
+                .contentShape(Rectangle())
+                .gesture(todayCarouselGesture(recipeCount: recipes.count))
 
             if recipes.count > 1 {
                 HStack(spacing: 6) {
@@ -186,49 +167,57 @@ struct MenuView: View {
         }
     }
 
-    private func todayRecipeCard(_ recipe: Recipe) -> some View {
+    private func todayRecipeCard(_ recipe: Recipe, enablesMarquee: Bool) -> some View {
         let isFavourite = appVM.savedRecipesVM.isSaved(recipe)
 
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.yellow.opacity(0.28))
-                        .frame(width: 52, height: 52)
+            GeometryReader { headerProxy in
+                let favouriteButtonWidth: CGFloat = 32
+                let titleToButtonGap: CGFloat = 18
+                let titleAreaWidth = max(
+                    0,
+                    headerProxy.size.width - favouriteButtonWidth - titleToButtonGap
+                )
 
-                    Image(systemName: "fork.knife")
-                        .font(.title3.weight(.black))
-                        .foregroundColor(.black)
-                }
+                HStack(alignment: .top, spacing: titleToButtonGap) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        MarqueeRecipeTitle(
+                            text: recipe.title,
+                            isEnabled: enablesMarquee
+                        )
+                            .frame(width: titleAreaWidth, height: 26, alignment: .leading)
+                            .clipped()
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(recipe.title)
-                        .font(.system(size: 20, weight: .black))
-                        .foregroundColor(.black)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    Text(recipe.estimatedTime)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(.gray)
-                }
-
-                Spacer(minLength: 8)
-
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
-                        appVM.toggleSavedState(for: recipe)
                     }
-                } label: {
-                    Image(systemName: isFavourite ? "star.fill" : "star")
-                        .font(.caption.weight(.black))
-                        .foregroundColor(isFavourite ? .yellow : .black)
-                        .frame(width: 32, height: 32)
-                        .background(isFavourite ? Color.black : Color.yellow)
-                        .clipShape(Circle())
+                    .frame(width: titleAreaWidth, alignment: .leading)
+
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                            appVM.toggleSavedState(for: recipe)
+                        }
+                    } label: {
+                        Image(systemName: isFavourite ? "star.fill" : "star")
+                            .font(.caption.weight(.black))
+                            .foregroundColor(isFavourite ? .yellow : .black)
+                            .frame(width: favouriteButtonWidth, height: favouriteButtonWidth)
+                            .background(isFavourite ? Color.black : Color.white.opacity(0.72))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isFavourite ? "Remove from favourites" : "Add to favourites")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isFavourite ? "Remove from favourites" : "Add to favourites")
+            }
+            .frame(height: 36)
+
+            HStack(spacing: 8) {
+                Label(recipe.estimatedTime, systemImage: "clock")
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 11)
+                    .frame(height: 30)
+                    .background(Color.white.opacity(0.58))
+                    .clipShape(Capsule())
+
             }
 
             HStack(spacing: 6) {
@@ -239,45 +228,123 @@ struct MenuView: View {
                         .lineLimit(1)
                         .padding(.horizontal, 10)
                         .frame(height: 28)
-                        .background(Color.yellow.opacity(0.42))
+                        .background(Color.white.opacity(0.58))
                         .clipShape(Capsule())
                 }
             }
 
+            Spacer(minLength: 8)
+
             HStack {
                 Label("\(recipe.ingredients.count) ingredients", systemImage: "basket")
                     .font(.caption.weight(.black))
-                    .foregroundColor(.black.opacity(0.66))
+                    .foregroundStyle(.black)
 
                 Spacer()
 
                 Button {
                     appVM.presentRecipe(recipe)
                 } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.subheadline.weight(.black))
+                    Image(systemName: "arrow.right")
+                        .font(.headline.weight(.black))
                         .foregroundStyle(.black)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 92, height: 44)
                         .background(Color.yellow)
-                        .clipShape(Circle())
+                        .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open \(recipe.title)")
             }
         }
         .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 174, maxHeight: 174, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 224, maxHeight: 224, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.yellow,
+                            Color(red: 1, green: 0.88, blue: 0.32)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .strokeBorder(Color.black.opacity(0.07), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .black.opacity(0.1), radius: 12, x: 0, y: 2)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
+
+private struct MarqueeRecipeTitle: View {
+    let text: String
+    let isEnabled: Bool
+
+    @State private var textWidth: CGFloat = 0
+    @State private var startDate = Date()
+
+    private let gap: CGFloat = 32
+    private let speed: CGFloat = 26
+
+    var body: some View {
+        GeometryReader { proxy in
+            let availableWidth = proxy.size.width
+
+            Group {
+                if isEnabled, textWidth > availableWidth, availableWidth > 0 {
+                    TimelineView(.animation) { timeline in
+                        let distance = textWidth + gap
+                        let elapsed = timeline.date.timeIntervalSince(startDate)
+                        let travel = CGFloat(elapsed) * speed
+                        let offset = -(travel.truncatingRemainder(dividingBy: distance))
+
+                        HStack(spacing: gap) {
+                            titleText
+                            titleText
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                        .offset(x: offset)
+                    }
+                } else {
+                    titleText
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
+            .mask(Rectangle())
+            .background {
+                titleText
+                    .fixedSize(horizontal: true, vertical: false)
+                    .hidden()
+                    .background(
+                        GeometryReader { textProxy in
+                            Color.clear
+                                .onAppear {
+                                    textWidth = textProxy.size.width
+                                    startDate = Date()
+                                }
+                                .onChange(of: textProxy.size.width) { _, newWidth in
+                                    textWidth = newWidth
+                                    startDate = Date()
+                                }
+                        }
+                    )
+            }
+        }
+        .clipped()
+        .compositingGroup()
+        .accessibilityLabel(text)
+    }
+
+    private var titleText: some View {
+        Text(text)
+            .font(.system(size: 20, weight: .black))
+            .foregroundColor(.black)
+            .lineLimit(1)
+    }
+}
 
     private func todayCarouselGesture(recipeCount: Int) -> some Gesture {
         DragGesture(minimumDistance: 12)
@@ -300,7 +367,7 @@ struct MenuView: View {
 
     private var header: some View {
         HStack {
-            Text("Recipes")
+            Text("Today's Recipe")
                 .font(.system(size: 28, weight: .black))
                 .foregroundColor(.black)
                 .lineLimit(1)
@@ -415,7 +482,7 @@ struct MenuView: View {
 
                 Text(recipe.estimatedTime)
                     .font(.subheadline.weight(.bold))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.black)
 
                 HStack(alignment: .center, spacing: 8) {
                     HStack(spacing: 6) {
@@ -443,7 +510,12 @@ struct MenuView: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 138, maxHeight: 138, alignment: .leading)
-            .background(Color.white)
+            .background {
+                ZStack {
+                    Color.white
+                    FavouriteCardArtwork(recipe: recipe)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -695,17 +767,6 @@ private struct RecipeDetailSplitView: View {
                     .padding(.horizontal, 44)
                 }
             }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 16, weight: .black))
-                    .foregroundStyle(.black)
-                    .frame(width: 42, height: 42)
-                    .background(Color.yellow)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.black, lineWidth: 2))
-                    .padding(.trailing, 22)
-                    .padding(.bottom, 50)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 0)
@@ -1161,7 +1222,7 @@ private struct FavouriteRecipesView: View {
 
                 Text(recipe.estimatedTime)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.gray)
+                    .foregroundStyle(.black)
 
                 HStack(alignment: .center, spacing: 8) {
                     HStack(spacing: 6) {
@@ -1189,7 +1250,12 @@ private struct FavouriteRecipesView: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 138, maxHeight: 138, alignment: .leading)
-            .background(Color.white)
+            .background {
+                ZStack {
+                    Color.white
+                    FavouriteCardArtwork(recipe: recipe)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -1221,6 +1287,48 @@ private struct FavouriteRecipesView: View {
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .ignoresSafeArea()
+        .accessibilityHidden(true)
+    }
+}
+
+private struct FavouriteCardArtwork: View {
+    let recipe: Recipe
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Group {
+                if let data = RecipeImageStore.shared.data(for: recipe.imageFileName),
+                   let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        Color.yellow.opacity(0.72)
+
+                        Image(systemName: "fork.knife.circle.fill")
+                            .font(.system(size: 64, weight: .black))
+                            .foregroundStyle(.yellow, .black)
+                    }
+                }
+            }
+            .frame(width: 190, height: 138)
+            .clipped()
+            .opacity(0.42)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black.opacity(0.88), location: 0.52),
+                        .init(color: .clear, location: 1)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+
+            Spacer(minLength: 0)
+        }
         .accessibilityHidden(true)
     }
 }

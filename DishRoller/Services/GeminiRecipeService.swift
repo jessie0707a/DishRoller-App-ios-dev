@@ -139,6 +139,156 @@ final class GeminiRecipeService {
         }
     }
 
+    func estimateExpiryDate(itemName: String, purchaseDate: Date) async throws -> Date {
+        let cleanName = itemName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else {
+            throw GeminiRecipeServiceError.invalidConfiguration("Enter the food name before estimating.")
+        }
+
+        guard !apiKey.isEmpty else {
+            return Calendar.current.date(byAdding: .day, value: 5, to: purchaseDate) ?? purchaseDate
+        }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.calendar = Calendar(identifier: .gregorian)
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let purchaseDateText = dateFormatter.string(from: purchaseDate)
+
+        let prompt = """
+        Estimate a conservative home-storage expiry date for this food item.
+
+        Food item: \(cleanName)
+        Purchase date: \(purchaseDateText)
+
+        Use reputable food-safety and storage references found through Google Search. Assume the item is unopened or freshly purchased, stored correctly in a normal household refrigerator when refrigeration is normally required, and otherwise stored according to standard guidance. Choose a cautious practical date rather than the longest possible shelf life.
+
+        Return only the estimated expiry date and a short reason. The expiry date must be on or after the purchase date.
+        """
+
+        guard let endpoint = URL(
+            string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent"
+        ) else {
+            throw GeminiRecipeServiceError.invalidConfiguration("Invalid Gemini model configuration.")
+        }
+
+        let groundedPrompt = prompt + """
+
+        Respond with only one JSON object in exactly this format:
+        {"expiryDate":"YYYY-MM-DD","reason":"short reason"}
+        Do not use Markdown or code fences.
+        """
+
+        let estimate: ExpiryEstimateDTO
+        do {
+            let responseText = try await requestExpiryEstimate(
+                endpoint: endpoint,
+                prompt: groundedPrompt,
+                usesGoogleSearch: true,
+                usesStructuredOutput: false
+            )
+            estimate = try Self.decodeExpiryEstimate(from: responseText)
+        } catch {
+            let responseText = try await requestExpiryEstimate(
+                endpoint: endpoint,
+                prompt: prompt,
+                usesGoogleSearch: false,
+                usesStructuredOutput: true
+            )
+            estimate = try Self.decodeExpiryEstimate(from: responseText)
+        }
+
+        guard let estimatedDate = dateFormatter.date(from: estimate.expiryDate) else {
+            throw GeminiRecipeServiceError.invalidResponse
+        }
+
+        return max(
+            Calendar.current.startOfDay(for: purchaseDate),
+            Calendar.current.startOfDay(for: estimatedDate)
+        )
+    }
+
+    private func requestExpiryEstimate(
+        endpoint: URL,
+        prompt: String,
+        usesGoogleSearch: Bool,
+        usesStructuredOutput: Bool
+    ) async throws -> String {
+        var generationConfig: [String: Any] = [
+            "temperature": 0.2
+        ]
+
+        if usesStructuredOutput {
+            generationConfig["responseMimeType"] = "application/json"
+            generationConfig["responseSchema"] = [
+                "type": "object",
+                "properties": [
+                    "expiryDate": [
+                        "type": "string",
+                        "description": "Estimated expiry date in YYYY-MM-DD format"
+                    ],
+                    "reason": ["type": "string"]
+                ],
+                "required": ["expiryDate", "reason"],
+                "propertyOrdering": ["expiryDate", "reason"]
+            ]
+        }
+
+        var requestBody: [String: Any] = [
+            "contents": [[
+                "parts": [["text": prompt]]
+            ]],
+            "generationConfig": generationConfig
+        ]
+
+        if usesGoogleSearch {
+            requestBody["tools"] = [["google_search": [:]]]
+        }
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.addValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GeminiRecipeServiceError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let apiError = try? JSONDecoder().decode(GeminiErrorResponse.self, from: data)
+            throw GeminiRecipeServiceError.apiError(
+                apiError?.error.message ?? "Gemini API returned status code \(httpResponse.statusCode)."
+            )
+        }
+
+        let decoded = try JSONDecoder().decode(GeminiGenerateContentResponse.self, from: data)
+        guard let text = decoded.candidates.first?.content.parts
+            .compactMap(\.text)
+            .joined()
+            .nonEmpty else {
+            throw GeminiRecipeServiceError.invalidResponse
+        }
+        return text
+    }
+
+    private static func decodeExpiryEstimate(from text: String) throws -> ExpiryEstimateDTO {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let data = trimmed.data(using: .utf8),
+           let estimate = try? JSONDecoder().decode(ExpiryEstimateDTO.self, from: data) {
+            return estimate
+        }
+
+        guard let openingBrace = trimmed.firstIndex(of: "{"),
+              let closingBrace = trimmed.lastIndex(of: "}"),
+              openingBrace <= closingBrace,
+              let data = String(trimmed[openingBrace...closingBrace]).data(using: .utf8) else {
+            throw GeminiRecipeServiceError.invalidResponse
+        }
+
+        return try JSONDecoder().decode(ExpiryEstimateDTO.self, from: data)
+    }
+
     private static func normalizedFlavourTag(_ tag: String) -> String {
         let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
         let inspiredSuffix = " Inspired"
@@ -416,6 +566,11 @@ private struct RecipeIngredientDTO: Codable {
 private struct RecipeProcedureStepDTO: Codable {
     let emoji: String
     let instruction: String
+}
+
+private struct ExpiryEstimateDTO: Codable {
+    let expiryDate: String
+    let reason: String
 }
 
 private enum DemoRecipeFactory {

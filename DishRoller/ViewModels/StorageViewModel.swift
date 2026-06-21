@@ -71,7 +71,8 @@ final class StorageViewModel: ObservableObject {
                 unit: displayRecord.unit,
                 iconName: displayRecord.iconName ?? displayRecord.category.foodIconAssetName,
                 imageData: displayRecord.imageData,
-                expiryDate: earliestExpiryDate(forIngredientNamed: displayRecord.name)
+                expiryDate: earliestExpiryDate(forIngredientNamed: displayRecord.name),
+                createdAt: displayRecord.createdAt
             )
         }
     }
@@ -112,7 +113,8 @@ final class StorageViewModel: ObservableObject {
         unit: UnitType,
         iconName: String? = nil,
         imageData: Data? = nil,
-        expiryDate: Date? = nil
+        expiryDate: Date? = nil,
+        createdAt: Date? = Date()
     ) {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty, amount > 0 else { return }
@@ -139,7 +141,8 @@ final class StorageViewModel: ObservableObject {
                 unit: unit,
                 iconName: iconName,
                 imageData: imageData,
-                expiryDate: expiryDate
+                expiryDate: expiryDate,
+                createdAt: createdAt
             )
             ingredients.append(newIngredient)
         }
@@ -155,7 +158,8 @@ final class StorageViewModel: ObservableObject {
         unit: UnitType,
         iconName: String? = nil,
         imageData: Data? = nil,
-        expiryDate: Date? = nil
+        expiryDate: Date? = nil,
+        createdAt: Date? = Date()
     ) -> Ingredient? {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty, amount > 0 else { return nil }
@@ -167,7 +171,8 @@ final class StorageViewModel: ObservableObject {
             unit: unit,
             iconName: iconName,
             imageData: imageData,
-            expiryDate: expiryDate
+            expiryDate: expiryDate,
+            createdAt: createdAt
         )
         ingredients.append(newIngredient)
         save()

@@ -272,6 +272,7 @@ struct DishRollerView: View {
             .padding(.horizontal, 16)
             .padding(.top, 72)
             .padding(.bottom, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(height: controlPanelHeight)
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: activeControlPanel)
@@ -396,17 +397,20 @@ struct DishRollerView: View {
     }
 
     private var rawResultsPanelContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             FlowResultView(results: vm.selectedResults) { ingredient in
                 removeSelectedResult(ingredient)
             }
             .frame(minHeight: 58, alignment: .leading)
+
+            Spacer(minLength: 8)
 
             HStack(spacing: 14) {
                 generateButton
                 clearButton
             }
         }
+        .frame(maxHeight: .infinity)
     }
 
     private var nearExpiryIngredients: [Ingredient] {
@@ -1137,11 +1141,14 @@ struct DishRollerView: View {
                     }
                     .foregroundStyle(.black)
                     .padding(18)
+                    .frame(maxWidth: 320)
                     .background(Color.white.opacity(0.94))
                     .clipShape(RoundedRectangle(cornerRadius: 18))
                     .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
                 }
+                .frame(maxWidth: .infinity)
                 .frame(height: 340)
+                .clipped()
             } else {
                 GeometryReader { geometry in
                     let wheelSize = geometry.size.width * 1.4
@@ -1219,17 +1226,22 @@ struct DishRollerView: View {
     }
 
     private var fadedEmptyRecipeWheel: some View {
-        ZStack {
-            Circle().fill(Color.white)
-            Circle().stroke(Color.black, lineWidth: 9).padding(2)
-            Circle().stroke(Color.yellow, lineWidth: 26).padding(10)
-            Circle().stroke(Color.black, lineWidth: 6).padding(24)
-            Circle().fill(Color(.systemGray5)).padding(130)
+        GeometryReader { geometry in
+            let wheelSize = min(geometry.size.width * 1.4, 520)
+
+            ZStack {
+                Circle().fill(Color.white)
+                Circle().stroke(Color.black, lineWidth: 9).padding(2)
+                Circle().stroke(Color.yellow, lineWidth: 26).padding(10)
+                Circle().stroke(Color.black, lineWidth: 6).padding(24)
+                Circle().fill(Color(.systemGray5)).padding(wheelSize * 0.25)
+            }
+            .frame(width: wheelSize, height: wheelSize)
+            .offset(y: 130)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .clipped()
         }
-        .frame(width: 520, height: 520)
-        .offset(y: 130)
-        .frame(maxWidth: .infinity)
-        .clipped()
+        .frame(height: 340)
     }
 
     private var recipeTurntableWheel: some View {

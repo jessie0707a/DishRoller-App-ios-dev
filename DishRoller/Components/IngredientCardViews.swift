@@ -31,15 +31,27 @@ struct IngredientCardView: View {
 
                     Spacer(minLength: 2)
 
-                    Text(expiryLabel)
-                        .font(.system(size: 14, weight: .black))
-                        .fontWeight(.black)
-                        .foregroundColor(expiryTextColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.55)
-                        .allowsTightening(true)
-                        .multilineTextAlignment(.trailing)
-                        .frame(minWidth: 54, maxWidth: 82, alignment: .trailing)
+                    HStack(spacing: 5) {
+                        Text(expiryLabel)
+                            .font(.system(size: 14, weight: .black))
+                            .fontWeight(.black)
+                            .foregroundColor(expiryTextColor)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.55)
+                            .allowsTightening(true)
+
+                        if ingredient.expiryDate == nil {
+                            Image(systemName: "exclamationmark")
+                                .font(.system(size: 9, weight: .black))
+                                .foregroundStyle(.black)
+                                .frame(width: 20, height: 20)
+                                .background(Color.yellow)
+                                .clipShape(Circle())
+                                .accessibilityLabel("Expiry date required")
+                        }
+                    }
+                    .multilineTextAlignment(.trailing)
+                    .frame(minWidth: 54, maxWidth: 96, alignment: .trailing)
                 }
 
                 itemImage

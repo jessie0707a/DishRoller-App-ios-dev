@@ -16,6 +16,7 @@ struct Ingredient: Identifiable, Codable, Equatable {
     var iconName: String?
     var imageData: Data?
     var expiryDate: Date?
+    var createdAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -25,7 +26,8 @@ struct Ingredient: Identifiable, Codable, Equatable {
         unit: UnitType,
         iconName: String? = nil,
         imageData: Data? = nil,
-        expiryDate: Date? = nil
+        expiryDate: Date? = nil,
+        createdAt: Date? = Date()
     ) {
         self.id = id
         self.name = name
@@ -35,5 +37,6 @@ struct Ingredient: Identifiable, Codable, Equatable {
         self.iconName = iconName
         self.imageData = imageData
         self.expiryDate = expiryDate
+        self.createdAt = createdAt
     }
 }
