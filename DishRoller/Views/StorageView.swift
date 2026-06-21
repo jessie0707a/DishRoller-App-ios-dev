@@ -15,6 +15,10 @@ struct StorageView: View {
     @State private var addFoodSheetContext: AddFoodSheetContext?
     @State private var editorContext: IngredientEditorContext?
     @State private var pendingDeleteIngredient: Ingredient?
+    @State private var selectedIngredientID: UUID?
+    @State private var selectedIngredientCardFrame: CGRect?
+    @State private var searchFieldFrame: CGRect?
+    @FocusState private var isSearchFieldFocused: Bool
 
     private let gridColumns = [
         GridItem(.flexible(), spacing: 12),
@@ -33,14 +37,37 @@ struct StorageView: View {
                         ForEach(appVM.storageVM.filteredIngredients) { ingredient in
                             IngredientCardView(
                                 ingredient: ingredient,
+                                isSelected: selectedIngredientID == ingredient.id,
                                 onEdit: {
                                     withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                                         editorContext = IngredientEditorContext(ingredientID: ingredient.id)
                                     }
                                 }
                             )
+                            .background {
+                                if selectedIngredientID == ingredient.id {
+                                    GeometryReader { proxy in
+                                        Color.clear.preference(
+                                            key: SelectedIngredientCardFrameKey.self,
+                                            value: proxy.frame(in: .named("storageScreenSpace"))
+                                        )
+                                    }
+                                }
+                            }
+                            .contentShape(RoundedRectangle(cornerRadius: 22))
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                                    selectedIngredientID = ingredient.id
+                                }
+                            }
                             .onLongPressGesture {
-                                pendingDeleteIngredient = ingredient
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                                    selectedIngredientID = ingredient.id
+                                }
+
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                    pendingDeleteIngredient = ingredient
+                                }
                             }
                         }
                     }
@@ -53,12 +80,36 @@ struct StorageView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 92)
             }
+            .scrollDismissesKeyboard(.interactively)
             .toolbar(.hidden, for: .navigationBar)
             .background(storageBackground)
             .overlay(alignment: .bottomTrailing) {
                 addFoodButton
             }
         }
+        .coordinateSpace(name: "storageScreenSpace")
+        .onPreferenceChange(SelectedIngredientCardFrameKey.self) {
+            selectedIngredientCardFrame = $0
+        }
+        .onPreferenceChange(StorageSearchFieldFrameKey.self) {
+            searchFieldFrame = $0
+        }
+        .simultaneousGesture(
+            SpatialTapGesture().onEnded { value in
+                if selectedIngredientID != nil,
+                   let selectedIngredientCardFrame,
+                   !selectedIngredientCardFrame.contains(value.location) {
+                    clearCardSelection()
+                }
+
+                if isSearchFieldFocused,
+                   let searchFieldFrame,
+                   !searchFieldFrame.contains(value.location) {
+                    isSearchFieldFocused = false
+                    dismissKeyboard()
+                }
+            }
+        )
         .sheet(item: $addFoodSheetContext) { context in
             AddFoodItemSheet(storageVM: appVM.storageVM, initialFoodName: context.initialName)
                 .presentationDetents([.medium, .large])
@@ -165,6 +216,12 @@ struct StorageView: View {
                     .font(.subheadline.weight(.semibold))
                     .textInputAutocapitalization(.words)
                     .disableAutocorrection(false)
+                    .submitLabel(.done)
+                    .focused($isSearchFieldFocused)
+                    .onSubmit {
+                        isSearchFieldFocused = false
+                        dismissKeyboard()
+                    }
 
                 if !appVM.storageVM.searchText.isEmpty {
                     Button {
@@ -180,6 +237,14 @@ struct StorageView: View {
             .frame(height: 50)
             .background(Color.white)
             .clipShape(Capsule())
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: StorageSearchFieldFrameKey.self,
+                        value: proxy.frame(in: .named("storageScreenSpace"))
+                    )
+                }
+            }
 
             Button {
                 showScannerPlaceholder = true
@@ -312,8 +377,30 @@ struct StorageView: View {
         }
     }
 
+    private func clearCardSelection() {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            selectedIngredientID = nil
+        }
+    }
+
     private func openAddFoodSheet(initialName: String = "") {
         addFoodSheetContext = AddFoodSheetContext(initialName: initialName)
+    }
+}
+
+private struct SelectedIngredientCardFrameKey: PreferenceKey {
+    static var defaultValue: CGRect?
+
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        value = nextValue() ?? value
+    }
+}
+
+private struct StorageSearchFieldFrameKey: PreferenceKey {
+    static var defaultValue: CGRect?
+
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        value = nextValue() ?? value
     }
 }
 
@@ -456,6 +543,10 @@ private struct PurchaseRecordEditorPage: View {
     @State private var showDeleteConfirmation = false
     @State private var validationMessage: String?
     @State private var activeControl: EditorControl?
+    @State private var editedImageData: Data?
+    @State private var showPhotoSourceOptions = false
+    @State private var imagePickerSource: StorageImagePickerSource?
+    @State private var showCameraUnavailable = false
     @FocusState private var focusedControl: EditorControl?
 
     init(
@@ -475,6 +566,7 @@ private struct PurchaseRecordEditorPage: View {
         _selectedUnit = State(initialValue: ingredient.unit)
         _expiryDate = State(initialValue: ingredient.expiryDate ?? Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date())
         _originalAmountBeforeQuantityEdit = State(initialValue: ingredient.amount)
+        _editedImageData = State(initialValue: ingredient.imageData)
     }
 
     var body: some View {
@@ -485,7 +577,29 @@ private struct PurchaseRecordEditorPage: View {
                     expiryDate: expiryDate,
                     onDelete: { showDeleteConfirmation = true }
                 )
-                editorImage(for: ingredient)
+                Button {
+                    focusedControl = nil
+                    showPhotoSourceOptions = true
+                } label: {
+                    editorImage(for: ingredient, imageData: editedImageData)
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 14, weight: .black))
+                                .foregroundStyle(.black)
+                                .frame(width: 36, height: 36)
+                                .background(Color.yellow)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.black, lineWidth: 2))
+                                .offset(x: -26, y: -4)
+                        }
+                        .overlay {
+                            Circle()
+                                .stroke(Color.yellow, style: StrokeStyle(lineWidth: 3, dash: [7, 5]))
+                                .frame(width: 158, height: 158)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Change item photo")
 
                 TextField("Food name", text: $itemNameText)
                     .font(.system(size: 24, weight: .black))
@@ -496,6 +610,10 @@ private struct PurchaseRecordEditorPage: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                     .focused($focusedControl, equals: .name)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        focusedControl = nil
+                    }
                     .editorInputStyle(maxWidth: 220, height: 42, isActive: isControlActive(.name))
                     .tint(.black)
 
@@ -513,6 +631,10 @@ private struct PurchaseRecordEditorPage: View {
                         .multilineTextAlignment(.center)
                         .font(.system(size: 20, weight: .black))
                         .focused($focusedControl, equals: .amount)
+                        .submitLabel(.done)
+                        .onSubmit {
+                            focusedControl = nil
+                        }
                         .editorInputStyle(width: 96, height: 44, isActive: isControlActive(.amount))
                         .tint(.black)
 
@@ -540,7 +662,7 @@ private struct PurchaseRecordEditorPage: View {
                 Button {
                     saveChanges()
                 } label: {
-                    Text("Finished")
+                    Text("Save")
                         .primaryPillStyle(background: .yellow, foreground: .black)
                 }
                 .buttonStyle(.plain)
@@ -566,6 +688,36 @@ private struct PurchaseRecordEditorPage: View {
             if let newValue {
                 activeControl = newValue
             }
+        }
+        .fullScreenCover(item: $imagePickerSource) { source in
+            StorageImagePicker(sourceType: source.uiSourceType) { image in
+                editedImageData = image.jpegData(compressionQuality: 0.7)
+            }
+            .ignoresSafeArea()
+        }
+        .confirmationDialog(
+            "Replace Item Photo",
+            isPresented: $showPhotoSourceOptions,
+            titleVisibility: .visible
+        ) {
+            Button("Take Photo") {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    imagePickerSource = .camera
+                } else {
+                    showCameraUnavailable = true
+                }
+            }
+
+            Button("Choose from Photo Library") {
+                imagePickerSource = .photoLibrary
+            }
+
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Camera unavailable", isPresented: $showCameraUnavailable) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("This device cannot open the camera right now.")
         }
         .alert("Check item details", isPresented: Binding(
             get: { validationMessage != nil },
@@ -743,7 +895,8 @@ private struct PurchaseRecordEditorPage: View {
             name: cleanName,
             amount: amount,
             unit: selectedUnit,
-            expiryDate: expiryDate
+            expiryDate: expiryDate,
+            imageData: editedImageData
         )
         onFinished()
     }
@@ -798,6 +951,10 @@ private struct NewPurchaseRecordPage: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                     .focused($focusedControl, equals: .name)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        focusedControl = nil
+                    }
                     .editorInputStyle(maxWidth: 220, height: 42, isActive: isControlActive(.name))
                     .tint(.black)
 
@@ -811,6 +968,10 @@ private struct NewPurchaseRecordPage: View {
                         .multilineTextAlignment(.center)
                         .font(.system(size: 20, weight: .black))
                         .focused($focusedControl, equals: .amount)
+                        .submitLabel(.done)
+                        .onSubmit {
+                            focusedControl = nil
+                        }
                         .editorInputStyle(width: 96, height: 44, isActive: isControlActive(.amount))
                         .tint(.black)
 
@@ -1003,13 +1164,13 @@ private func editorHeader(
     }
 }
 
-private func editorImage(for ingredient: Ingredient) -> some View {
+private func editorImage(for ingredient: Ingredient, imageData: Data? = nil) -> some View {
     ZStack {
         Circle()
             .fill(Color(red: 0.95, green: 0.72, blue: 0.72).opacity(0.45))
             .frame(width: 152, height: 152)
 
-        if let imageData = ingredient.imageData,
+        if let imageData = imageData ?? ingredient.imageData,
            let image = UIImage(data: imageData) {
             Image(uiImage: image)
                 .resizable()
@@ -1168,7 +1329,8 @@ private struct AddFoodItemSheet: View {
     @State private var selectedIconName = IngredientCategory.meat.foodIconAssetName
     @State private var expiryDate = Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
     @State private var capturedImageData: Data?
-    @State private var showCamera = false
+    @State private var showPhotoSourceOptions = false
+    @State private var imagePickerSource: StorageImagePickerSource?
     @State private var showCameraUnavailable = false
     @State private var validationMessage: String?
 
@@ -1200,6 +1362,8 @@ private struct AddFoodItemSheet: View {
                             .font(.headline)
                             .textInputAutocapitalization(.words)
                             .disableAutocorrection(false)
+                            .submitLabel(.done)
+                            .onSubmit(dismissKeyboard)
                             .padding(.horizontal, 16)
                             .frame(height: 54)
                             .background(Color(.systemGray6))
@@ -1226,6 +1390,8 @@ private struct AddFoodItemSheet: View {
                             TextField("300", text: $quantityText)
                                 .font(.headline)
                                 .keyboardType(.decimalPad)
+                                .submitLabel(.done)
+                                .onSubmit(dismissKeyboard)
                                 .padding(.horizontal, 16)
                                 .frame(height: 54)
                                 .background(Color(.systemGray6))
@@ -1269,14 +1435,34 @@ private struct AddFoodItemSheet: View {
                 .padding(.top, 18)
                 .padding(.bottom, 28)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(Color.white)
             .toolbar(.hidden, for: .navigationBar)
         }
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraImagePicker { image in
+        .fullScreenCover(item: $imagePickerSource) { source in
+            StorageImagePicker(sourceType: source.uiSourceType) { image in
                 capturedImageData = image.jpegData(compressionQuality: 0.7)
             }
             .ignoresSafeArea()
+        }
+        .confirmationDialog(
+            "Add Item Photo",
+            isPresented: $showPhotoSourceOptions,
+            titleVisibility: .visible
+        ) {
+            Button("Take Photo") {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    imagePickerSource = .camera
+                } else {
+                    showCameraUnavailable = true
+                }
+            }
+
+            Button("Choose from Photo Library") {
+                imagePickerSource = .photoLibrary
+            }
+
+            Button("Cancel", role: .cancel) {}
         }
         .alert("Camera unavailable", isPresented: $showCameraUnavailable) {
             Button("OK", role: .cancel) {}
@@ -1343,15 +1529,11 @@ private struct AddFoodItemSheet: View {
                     }
 
                     Button {
-                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                            showCamera = true
-                        } else {
-                            showCameraUnavailable = true
-                        }
+                        showPhotoSourceOptions = true
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "camera.fill")
-                            Text("Take Photo")
+                            Image(systemName: "photo.on.rectangle.angled")
+                            Text("Add Photo")
                         }
                         .font(.subheadline)
                         .fontWeight(.black)
@@ -1468,13 +1650,28 @@ private struct AddFoodItemSheet: View {
     }
 }
 
-private struct CameraImagePicker: UIViewControllerRepresentable {
+private enum StorageImagePickerSource: String, Identifiable {
+    case camera
+    case photoLibrary
+
+    var id: String { rawValue }
+
+    var uiSourceType: UIImagePickerController.SourceType {
+        switch self {
+        case .camera: .camera
+        case .photoLibrary: .photoLibrary
+        }
+    }
+}
+
+private struct StorageImagePicker: UIViewControllerRepresentable {
+    let sourceType: UIImagePickerController.SourceType
     let onImagePicked: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
-        picker.sourceType = .camera
+        picker.sourceType = sourceType
         picker.delegate = context.coordinator
         picker.allowsEditing = true
         return picker
@@ -1487,9 +1684,9 @@ private struct CameraImagePicker: UIViewControllerRepresentable {
     }
 
     final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
-        private let parent: CameraImagePicker
+        private let parent: StorageImagePicker
 
-        init(parent: CameraImagePicker) {
+        init(parent: StorageImagePicker) {
             self.parent = parent
         }
 

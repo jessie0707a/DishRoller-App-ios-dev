@@ -59,13 +59,14 @@ struct DishRollerView: View {
     @State private var storageNoticeMessage: String?
     @State private var storageNoticeTask: Task<Void, Never>?
     @State private var activeControlPanel: ControlPanelTab = .selection
+    @State private var controlPanelPage = 0
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
-                    controlPanel
+                    controlPanelCarousel
                     modeBar
                     wheelView
                         .padding(.top, -30)
@@ -74,6 +75,7 @@ struct DishRollerView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 8)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(pageBackground)
             .navigationBarHidden(true)
         }
@@ -105,6 +107,13 @@ struct DishRollerView: View {
         }
         .onChange(of: vm.isLoading) { _, isLoading in
             updateMagicAnimation(isLoading: isLoading)
+        }
+        .onChange(of: nearExpiryIngredients.map(\.id)) { oldIDs, newIDs in
+            if oldIDs.isEmpty, !newIDs.isEmpty {
+                controlPanelPage = 0
+            } else if newIDs.isEmpty {
+                controlPanelPage = 0
+            }
         }
         .onDisappear {
             stopSpinTimer()
@@ -143,6 +152,97 @@ struct DishRollerView: View {
         Color(red: 0.96, green: 0.95, blue: 0.98)
     }
 
+    @ViewBuilder
+    private var controlPanelCarousel: some View {
+        if nearExpiryIngredients.isEmpty {
+            controlPanel
+        } else {
+            VStack(spacing: 10) {
+                TabView(selection: $controlPanelPage) {
+                    expiryNotificationPanel
+                        .tag(0)
+
+                    controlPanel
+                        .tag(1)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: controlPanelHeight)
+
+                HStack(spacing: 6) {
+                    Capsule()
+                        .fill(controlPanelPage == 0 ? Color.black : Color.black.opacity(0.22))
+                        .frame(width: controlPanelPage == 0 ? 18 : 6, height: 6)
+
+                    Capsule()
+                        .fill(controlPanelPage == 1 ? Color.black : Color.black.opacity(0.22))
+                        .frame(width: controlPanelPage == 1 ? 18 : 6, height: 6)
+                }
+                .animation(.spring(response: 0.28, dampingFraction: 0.82), value: controlPanelPage)
+            }
+        }
+    }
+
+    private var expiryNotificationPanel: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            ZStack {
+                Text("Cook These Soon")
+                    .font(.system(size: 21, weight: .black))
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 21, weight: .black))
+                        .foregroundStyle(.yellow)
+                        .frame(width: 44, height: 44)
+                        .background(Color.black)
+                        .clipShape(Circle())
+
+                    Spacer()
+                }
+            }
+
+            Text(expiryNotificationSummary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.black.opacity(0.68))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            Text(nearExpiryIngredients.map(\.name).joined(separator: " • "))
+                .font(.system(size: nearExpiryIngredients.count >= 4 ? 12 : 14, weight: .black))
+                .foregroundStyle(.black)
+                .lineLimit(2)
+                .minimumScaleFactor(0.72)
+                .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+
+            Spacer(minLength: 14)
+
+            Button(action: cookNearExpiryIngredients) {
+                Text("Cook Them")
+                    .font(.subheadline.weight(.black))
+                    .foregroundStyle(.yellow)
+                    .frame(width: 220)
+                    .frame(height: 42)
+                    .background(Color.black)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 2)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity, minHeight: controlPanelHeight, alignment: .topLeading)
+        .background(panelYellowGradient)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(Color.black.opacity(0.12), lineWidth: 1)
+        )
+    }
+
     private var controlPanel: some View {
         let isSelectionActive = activeControlPanel == .selection
 
@@ -156,7 +256,7 @@ struct DishRollerView: View {
                 .frame(height: controlPanelHeight)
 
             ControlFolderShape(tabOnLeft: isSelectionActive)
-                .fill(Color.yellow)
+                .fill(panelYellowGradient)
                 .frame(height: controlPanelHeight)
 
             controlPanelTabs
@@ -177,8 +277,16 @@ struct DishRollerView: View {
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: activeControlPanel)
     }
 
+    private var panelYellowGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color.yellow, Color(red: 1, green: 0.88, blue: 0.32)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     private var controlPanelHeight: CGFloat {
-        activeControlPanel == .selection ? 218 : 224
+        224
     }
 
     private var controlPanelTabs: some View {
@@ -298,6 +406,52 @@ struct DishRollerView: View {
                 generateButton
                 clearButton
             }
+        }
+    }
+
+    private var nearExpiryIngredients: [Ingredient] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        var seenNames: Set<String> = []
+
+        return appVM.storageVM.ingredients
+            .filter { ingredient in
+                guard ingredient.amount > 0, let expiryDate = ingredient.expiryDate else {
+                    return false
+                }
+                let expiryDay = calendar.startOfDay(for: expiryDate)
+                let days = calendar.dateComponents([.day], from: today, to: expiryDay).day ?? 2
+                return (0...1).contains(days)
+            }
+            .sorted {
+                ($0.expiryDate ?? .distantFuture) < ($1.expiryDate ?? .distantFuture)
+            }
+            .filter { ingredient in
+                let key = ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                guard !seenNames.contains(key) else { return false }
+                seenNames.insert(key)
+                return true
+            }
+    }
+
+    private var expiryNotificationSummary: String {
+        let count = nearExpiryIngredients.count
+        return count == 1
+            ? "1 storage item expires today or tomorrow."
+            : "\(count) storage items expire today or tomorrow."
+    }
+
+    private func cookNearExpiryIngredients() {
+        selectedMode = .raw
+        vm.clearResults()
+
+        for ingredient in nearExpiryIngredients.prefix(5) {
+            vm.addSelection(ingredient)
+        }
+
+        activeControlPanel = .results
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            controlPanelPage = 1
         }
     }
 
@@ -497,7 +651,11 @@ struct DishRollerView: View {
             .background(Color.white)
             .clipShape(Capsule())
             .accessibilityLabel("Recipe preferences")
-            .onSubmit(addPreferredIngredient)
+            .submitLabel(.done)
+            .onSubmit {
+                addPreferredIngredient()
+                dismissKeyboard()
+            }
     }
 
     private var addIngredientButton: some View {
@@ -1512,28 +1670,33 @@ struct FlowResultView: View {
     let onRemove: (Ingredient) -> Void
 
     var body: some View {
-        ResultFlowLayout(spacing: 8, lineSpacing: 8) {
+        let isCompact = results.count >= 4
+
+        ResultFlowLayout(
+            spacing: isCompact ? 5 : 8,
+            lineSpacing: isCompact ? 5 : 8
+        ) {
             ForEach(results) { ingredient in
                 Button {
                     onRemove(ingredient)
                 } label: {
-                    HStack(alignment: .top, spacing: 6) {
+                    HStack(alignment: .center, spacing: isCompact ? 4 : 6) {
                         Text(ingredient.name)
-                            .lineLimit(nil)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.58)
+                            .allowsTightening(true)
                             .multilineTextAlignment(.leading)
 
                         Image(systemName: "xmark")
-                            .font(.caption.weight(.bold))
-                            .padding(.top, 3)
+                            .font((isCompact ? Font.caption2 : Font.caption).weight(.bold))
                     }
-                    .font(.headline)
+                    .font(isCompact ? .system(size: 12) : .headline)
                     .fontWeight(.bold)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, isCompact ? 9 : 16)
+                    .padding(.vertical, isCompact ? 6 : 8)
                     .background(Color.white)
                     .foregroundColor(.black)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .clipShape(RoundedRectangle(cornerRadius: isCompact ? 14 : 18))
                 }
                 .buttonStyle(.plain)
             }

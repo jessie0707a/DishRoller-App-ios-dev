@@ -35,6 +35,7 @@ struct RootTabView: View {
                 }
             }
         }
+        .dismissKeyboardOnOutsideTap()
     }
 
     @ViewBuilder

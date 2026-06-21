@@ -41,6 +41,18 @@ final class SavedRecipesViewModel: ObservableObject {
         }
     }
 
+    func updateImage(for recipeID: UUID, imageFileName: String) {
+        guard let index = savedRecipes.firstIndex(where: { $0.id == recipeID }) else { return }
+        savedRecipes[index].imageFileName = imageFileName
+        persist()
+    }
+
+    func updateTitle(for recipeID: UUID, title: String) {
+        guard let index = savedRecipes.firstIndex(where: { $0.id == recipeID }) else { return }
+        savedRecipes[index].title = title
+        persist()
+    }
+
     private func persist() {
         StorageService.shared.saveRecipes(savedRecipes)
     }

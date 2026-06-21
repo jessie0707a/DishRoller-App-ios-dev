@@ -49,6 +49,7 @@ struct AvoidancePreferencesView: View {
             }
         }
         .listStyle(.plain)
+        .scrollDismissesKeyboard(.interactively)
         .scrollContentBackground(.hidden)
         .background(avoidancePageBackground)
         .navigationBarBackButtonHidden(true)
@@ -131,6 +132,8 @@ private struct AvoidanceProfileCard: View {
                     .font(.headline)
                     .fontWeight(.black)
                     .textInputAutocapitalization(.words)
+                    .submitLabel(.done)
+                    .onSubmit(dismissKeyboard)
 
                     TextField(
                         "Foods to avoid, separated by commas",
@@ -143,6 +146,8 @@ private struct AvoidanceProfileCard: View {
                     .font(.subheadline)
                     .lineLimit(1...3)
                     .textInputAutocapitalization(.sentences)
+                    .submitLabel(.done)
+                    .onSubmit(dismissKeyboard)
                 }
             }
         }

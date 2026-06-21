@@ -189,7 +189,8 @@ final class StorageViewModel: ObservableObject {
         name: String,
         amount: Double,
         unit: UnitType,
-        expiryDate: Date?
+        expiryDate: Date?,
+        imageData: Data?
     ) {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty,
@@ -205,6 +206,10 @@ final class StorageViewModel: ObservableObject {
         ingredients[index].amount = amount
         ingredients[index].unit = unit
         ingredients[index].expiryDate = expiryDate
+        ingredients[index].imageData = imageData
+        if imageData != nil {
+            ingredients[index].iconName = nil
+        }
         save()
     }
 
@@ -372,7 +377,7 @@ final class StorageViewModel: ObservableObject {
         guard let index = shoppingListItems.firstIndex(where: { $0.id == item.id }) else { return }
         guard !shoppingListItems[index].isCompleted else { return }
 
-        let category = shoppingCategory(for: item.ingredientName)
+        let category = item.selectedCategory ?? shoppingCategory(for: item.ingredientName)
         var generatedRecordIDs: [UUID] = []
         let purchaseAmounts: [String]
 
@@ -407,6 +412,19 @@ final class StorageViewModel: ObservableObject {
         }
 
         shoppingListItems[index].editedAmountText = amountText
+        saveShoppingListItems()
+    }
+
+    func updateShoppingListItemCategory(
+        _ item: ShoppingListItem,
+        category: IngredientCategory
+    ) {
+        guard let index = shoppingListItems.firstIndex(where: { $0.id == item.id }),
+              !shoppingListItems[index].isCompleted else {
+            return
+        }
+
+        shoppingListItems[index].selectedCategory = category
         saveShoppingListItems()
     }
 

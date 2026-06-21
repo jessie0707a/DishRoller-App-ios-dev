@@ -566,7 +566,29 @@ private struct RecipeDetailSplitView: View {
     let onClose: () -> Void
 
     @State private var isExpanded = false
+    @State private var heroImageFileName: String?
+    @State private var heroImageRefreshID = UUID()
+    @State private var showPhotoSourceOptions = false
+    @State private var imagePickerSource: RecipeImagePickerSource?
+    @State private var showCameraUnavailable = false
     @GestureState private var panelDragOffset: CGFloat = 0
+
+    init(
+        recipe: Recipe,
+        menuVM: MenuViewModel,
+        storageIngredients: [Ingredient],
+        generationContext: RecipeGenerationContext,
+        showsRating: Bool,
+        onClose: @escaping () -> Void
+    ) {
+        self.recipe = recipe
+        self.menuVM = menuVM
+        self.storageIngredients = storageIngredients
+        self.generationContext = generationContext
+        self.showsRating = showsRating
+        self.onClose = onClose
+        _heroImageFileName = State(initialValue: recipe.imageFileName)
+    }
 
     private var safeAreaTop: CGFloat {
         UIApplication.shared.connectedScenes
@@ -614,11 +636,44 @@ private struct RecipeDetailSplitView: View {
         }
         .background(Color(red: 0.96, green: 0.95, blue: 0.98).ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .all)
+        .fullScreenCover(item: $imagePickerSource) { source in
+            RecipeImagePicker(sourceType: source.uiSourceType) { image in
+                saveRecipeImage(image)
+            }
+            .ignoresSafeArea()
+        }
+        .confirmationDialog(
+            "Change Recipe Photo",
+            isPresented: $showPhotoSourceOptions,
+            titleVisibility: .visible
+        ) {
+            Button("Take Photo") {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    imagePickerSource = .camera
+                } else {
+                    showCameraUnavailable = true
+                }
+            }
+
+            Button("Choose from Photo Library") {
+                imagePickerSource = .photoLibrary
+            }
+
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Camera unavailable", isPresented: $showCameraUnavailable) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("This device cannot open the camera right now.")
+        }
     }
 
     private var heroImage: some View {
-        Group {
-            if let data = RecipeImageStore.shared.data(for: recipe.imageFileName),
+        Button {
+            showPhotoSourceOptions = true
+        } label: {
+            Group {
+            if let data = RecipeImageStore.shared.data(for: heroImageFileName),
                let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
@@ -630,8 +685,9 @@ private struct RecipeDetailSplitView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "fork.knife.circle.fill")
                             .font(.system(size: 76, weight: .black))
-                        Text(recipe.title)
-                            .font(.title2.weight(.black))
+
+                        Text("Tap to take or select a photo for the dish")
+                            .font(.subheadline.weight(.black))
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
                     }
@@ -639,8 +695,42 @@ private struct RecipeDetailSplitView: View {
                     .padding(.horizontal, 44)
                 }
             }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 16, weight: .black))
+                    .foregroundStyle(.black)
+                    .frame(width: 42, height: 42)
+                    .background(Color.yellow)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.black, lineWidth: 2))
+                    .padding(.trailing, 22)
+                    .padding(.bottom, 50)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 0)
+                    .stroke(Color.yellow.opacity(0.85), style: StrokeStyle(lineWidth: 3, dash: [9, 7]))
+            }
         }
+        .buttonStyle(.plain)
+        .id(heroImageRefreshID)
         .accessibilityLabel("Photo of \(recipe.title)")
+        .accessibilityHint("Double tap to change the recipe photo")
+    }
+
+    private func saveRecipeImage(_ image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 0.78),
+              let fileName = RecipeImageStore.shared.save(
+                data,
+                recipeID: recipe.id,
+                mimeType: "image/jpeg"
+              ) else {
+            return
+        }
+
+        heroImageFileName = fileName
+        heroImageRefreshID = UUID()
+        appVM.updateRecipeImage(for: recipe.id, imageFileName: fileName)
     }
 
     private var detailHeader: some View {
@@ -1147,15 +1237,52 @@ private struct RecipeCardView: View {
 
     @State private var recipeRating = 0
     @State private var sharePayload: RecipeSharePayload?
+    @State private var editableTitle: String
+    @FocusState private var isTitleFocused: Bool
+
+    init(
+        recipe: Recipe,
+        menuVM: MenuViewModel,
+        storageIngredients: [Ingredient],
+        generationContext: RecipeGenerationContext,
+        showsRating: Bool,
+        onLeave: @escaping () -> Void
+    ) {
+        self.recipe = recipe
+        self.menuVM = menuVM
+        self.storageIngredients = storageIngredients
+        self.generationContext = generationContext
+        self.showsRating = showsRating
+        self.onLeave = onLeave
+        _editableTitle = State(initialValue: recipe.title)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(recipe.title)
+            TextField("Recipe name", text: $editableTitle, axis: .vertical)
                 .font(.title)
                 .fontWeight(.black)
                 .foregroundColor(.black)
                 .lineLimit(3)
                 .minimumScaleFactor(0.72)
+                .textInputAutocapitalization(.words)
+                .disableAutocorrection(false)
+                .submitLabel(.done)
+                .focused($isTitleFocused)
+                .onSubmit(saveRecipeTitle)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(isTitleFocused ? Color.yellow.opacity(0.16) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(
+                            isTitleFocused ? Color.yellow : Color.black.opacity(0.12),
+                            style: StrokeStyle(lineWidth: isTitleFocused ? 2.5 : 1, dash: [7, 5])
+                        )
+                )
+                .accessibilityLabel("Recipe name")
+                .accessibilityHint("Tap to edit")
 
             HStack {
                 Text("Estimated Time:")
@@ -1183,12 +1310,12 @@ private struct RecipeCardView: View {
                             ingredient,
                             storageIngredients: storageIngredients
                         ),
-                        isInShoppingList: appVM.storageVM.isInShoppingList(ingredient, recipeName: recipe.title),
+                        isInShoppingList: appVM.storageVM.isInShoppingList(ingredient, recipeName: displayedRecipe.title),
                         onAddToShoppingList: {
-                            appVM.storageVM.addShoppingListItem(from: ingredient, recipeName: recipe.title)
+                            appVM.storageVM.addShoppingListItem(from: ingredient, recipeName: displayedRecipe.title)
                         },
                         onRemoveFromShoppingList: {
-                            appVM.storageVM.removeShoppingListItem(from: ingredient, recipeName: recipe.title)
+                            appVM.storageVM.removeShoppingListItem(from: ingredient, recipeName: displayedRecipe.title)
                         }
                     )
                 }
@@ -1220,6 +1347,32 @@ private struct RecipeCardView: View {
                 .presentationBackground(.clear)
                 .interactiveDismissDisabled()
         }
+        .onChange(of: isTitleFocused) { wasFocused, isFocused in
+            if wasFocused, !isFocused {
+                saveRecipeTitle()
+            }
+        }
+        .onDisappear(perform: saveRecipeTitle)
+    }
+
+    private var displayedRecipe: Recipe {
+        var updatedRecipe = recipe
+        let cleanTitle = editableTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanTitle.isEmpty {
+            updatedRecipe.title = cleanTitle
+        }
+        return updatedRecipe
+    }
+
+    private func saveRecipeTitle() {
+        let cleanTitle = editableTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanTitle.isEmpty {
+            editableTitle = recipe.title
+        } else {
+            editableTitle = cleanTitle
+            appVM.updateRecipeTitle(for: recipe.id, title: cleanTitle)
+        }
+        isTitleFocused = false
     }
 
     private var actionButtons: some View {
@@ -1229,7 +1382,7 @@ private struct RecipeCardView: View {
             }
 
             Button {
-                appVM.consumeRecipeIngredients(for: recipe)
+                appVM.consumeRecipeIngredients(for: displayedRecipe)
                 onLeave()
             } label: {
                 HStack(spacing: 9) {
@@ -1331,7 +1484,7 @@ private struct RecipeCardView: View {
     @MainActor
     private func shareRecipe() {
         let renderer = ImageRenderer(
-            content: RecipeShareImage(recipe: recipe)
+            content: RecipeShareImage(recipe: displayedRecipe)
                 .frame(width: 390)
         )
         renderer.proposedSize = ProposedViewSize(width: 390, height: nil)
@@ -1630,6 +1783,63 @@ private struct RecipeShareImage: View {
             Text(title)
                 .font(.title3.weight(.black))
             content()
+        }
+    }
+}
+
+private enum RecipeImagePickerSource: String, Identifiable {
+    case camera
+    case photoLibrary
+
+    var id: String { rawValue }
+
+    var uiSourceType: UIImagePickerController.SourceType {
+        switch self {
+        case .camera: .camera
+        case .photoLibrary: .photoLibrary
+        }
+    }
+}
+
+private struct RecipeImagePicker: UIViewControllerRepresentable {
+    let sourceType: UIImagePickerController.SourceType
+    let onImagePicked: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = sourceType
+        picker.delegate = context.coordinator
+        picker.allowsEditing = true
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        private let parent: RecipeImagePicker
+
+        init(parent: RecipeImagePicker) {
+            self.parent = parent
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            let image = info[.editedImage] as? UIImage ?? info[.originalImage] as? UIImage
+            if let image {
+                parent.onImagePicked(image)
+            }
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
         }
     }
 }

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct IngredientCardView: View {
     let ingredient: Ingredient
+    let isSelected: Bool
     let onEdit: () -> Void
 
     var body: some View {
@@ -85,7 +86,16 @@ struct IngredientCardView: View {
         .frame(height: 238)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .inset(by: isSelected ? 1.5 : 0)
+                .stroke(
+                    isSelected ? Color.yellow : Color.clear,
+                    lineWidth: isSelected ? 3 : 0
+                )
+        )
         .shadow(color: .black.opacity(0.06), radius: 14, y: 8)
+        .animation(.spring(response: 0.28, dampingFraction: 0.84), value: isSelected)
     }
 
     private var itemImage: some View {

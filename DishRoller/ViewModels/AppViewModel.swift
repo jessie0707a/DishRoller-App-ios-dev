@@ -184,6 +184,37 @@ final class AppViewModel: ObservableObject {
         currentRecipe = updatedCurrentRecipe
     }
 
+    func updateRecipeImage(for recipeID: UUID, imageFileName: String) {
+        if let index = generatedRecipeRecords.firstIndex(where: { $0.id == recipeID }) {
+            generatedRecipeRecords[index].recipe.imageFileName = imageFileName
+            persistGeneratedRecipes()
+        }
+
+        savedRecipesVM.updateImage(for: recipeID, imageFileName: imageFileName)
+
+        if var updatedCurrentRecipe = currentRecipe, updatedCurrentRecipe.id == recipeID {
+            updatedCurrentRecipe.imageFileName = imageFileName
+            currentRecipe = updatedCurrentRecipe
+        }
+    }
+
+    func updateRecipeTitle(for recipeID: UUID, title: String) {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else { return }
+
+        if let index = generatedRecipeRecords.firstIndex(where: { $0.id == recipeID }) {
+            generatedRecipeRecords[index].recipe.title = cleanTitle
+            persistGeneratedRecipes()
+        }
+
+        savedRecipesVM.updateTitle(for: recipeID, title: cleanTitle)
+
+        if var updatedCurrentRecipe = currentRecipe, updatedCurrentRecipe.id == recipeID {
+            updatedCurrentRecipe.title = cleanTitle
+            currentRecipe = updatedCurrentRecipe
+        }
+    }
+
     private func bindChildViewModels() {
         storageVM.objectWillChange
             .sink { [weak self] _ in

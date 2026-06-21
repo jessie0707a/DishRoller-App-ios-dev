@@ -12,6 +12,8 @@ struct OnlineShoppingView: View {
     @ObservedObject var storageVM: StorageViewModel
     @State private var pendingRecoveryItem: ShoppingListItem?
     @State private var selectedShoppingItemID: UUID?
+    @State private var categoryPickerItemID: UUID?
+    @State private var selectedShoppingCardFrame: CGRect?
 
     private let shops = [
         OnlineShop(name: "Woolworths Online", url: URL(string: "https://www.woolworths.com.au/")!),
@@ -42,6 +44,7 @@ struct OnlineShoppingView: View {
             } header: {
                 Text("Shopping List")
                     .foregroundStyle(.black)
+                    .onTapGesture(perform: clearSelection)
             }
 
             Section {
@@ -64,17 +67,37 @@ struct OnlineShoppingView: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .simultaneousGesture(TapGesture().onEnded(clearSelection))
                     .padding(.vertical, 8)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                 }
             } header: {
                 Text("Online Shopping")
                     .foregroundStyle(.black)
+                    .onTapGesture(perform: clearSelection)
             }
         }
         .listStyle(.insetGrouped)
+        .coordinateSpace(name: "shoppingListSpace")
+        .onPreferenceChange(SelectedShoppingCardFrameKey.self) {
+            selectedShoppingCardFrame = $0
+        }
+        .simultaneousGesture(
+            SpatialTapGesture().onEnded { value in
+                guard selectedShoppingItemID != nil,
+                      let selectedShoppingCardFrame,
+                      !selectedShoppingCardFrame.contains(value.location) else {
+                    return
+                }
+                clearSelection()
+            }
+        )
         .scrollContentBackground(.hidden)
-        .background(shoppingPageBackground)
+        .background {
+            shoppingPageBackground
+                .contentShape(Rectangle())
+                .onTapGesture(perform: clearSelection)
+        }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -103,6 +126,29 @@ struct OnlineShoppingView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The storage record created for this purchase will be deleted, and the item will return to the active shopping list.")
+        }
+        .confirmationDialog(
+            "Choose Food Type",
+            isPresented: Binding(
+                get: { categoryPickerItemID != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        categoryPickerItemID = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            ForEach(IngredientCategory.allCases) { category in
+                Button(category.displayTitle) {
+                    guard let item = categoryPickerItem else { return }
+                    storageVM.updateShoppingListItemCategory(item, category: category)
+                    categoryPickerItemID = nil
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                categoryPickerItemID = nil
+            }
         }
     }
 
@@ -133,6 +179,7 @@ struct OnlineShoppingView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .background(Color(red: 1, green: 0.82, blue: 0.05))
+        .onTapGesture(perform: clearSelection)
     }
 
     private var shoppingPageBackground: some View {
@@ -157,6 +204,11 @@ struct OnlineShoppingView: View {
             }
             return $0.addedAt < $1.addedAt
         }
+    }
+
+    private var categoryPickerItem: ShoppingListItem? {
+        guard let categoryPickerItemID else { return nil }
+        return storageVM.shoppingListItems.first { $0.id == categoryPickerItemID }
     }
 
     private var emptyShoppingListRow: some View {
@@ -184,13 +236,14 @@ struct OnlineShoppingView: View {
     }
 
     private func shoppingListRow(_ item: ShoppingListItem) -> some View {
-        let category = storageVM.shoppingCategory(for: item.ingredientName)
+        let liveItem = storageVM.shoppingListItems.first(where: { $0.id == item.id }) ?? item
+        let category = liveItem.selectedCategory ?? storageVM.shoppingCategory(for: item.ingredientName)
         let isSelected = selectedShoppingItemID == item.id
         let currentAmount = storageVM.shoppingListItems
             .first(where: { $0.id == item.id })?
             .amountText ?? item.amountText
 
-        return HStack(alignment: .center, spacing: 13) {
+        return HStack(alignment: .center, spacing: 10) {
             Button {
                 if item.isCompleted {
                     pendingRecoveryItem = item
@@ -200,67 +253,63 @@ struct OnlineShoppingView: View {
                     }
                 }
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: item.isCompleted
-                                ? [Color.yellow, Color.yellow]
-                                : [
-                                    Color.black.opacity(0.14),
-                                    Color(.systemGray5),
-                                    Color.white.opacity(0.72)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    if item.isCompleted {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .black))
-                            .foregroundColor(.black)
-                    }
-                }
-                .frame(width: 27, height: 27)
+                Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.title2.weight(.bold))
+                    .foregroundColor(item.isCompleted ? .yellow : .gray)
+                    .frame(width: 30, height: 30)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(item.isCompleted ? "Recover \(item.ingredientName)" : "Mark \(item.ingredientName) as purchased")
 
-            ZStack {
-                Circle()
-                    .fill(
-                        item.isCompleted
-                        ? Color(.systemGray4).opacity(0.7)
-                        : categoryTint(for: category).opacity(0.18)
-                    )
-                    .frame(width: 46, height: 46)
+            Button {
+                guard isSelected, !item.isCompleted else { return }
+                categoryPickerItemID = item.id
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(
+                            item.isCompleted
+                            ? Color(.systemGray4).opacity(0.7)
+                            : categoryTint(for: category).opacity(0.18)
+                        )
+                        .frame(width: isSelected ? 58 : 44, height: isSelected ? 58 : 44)
 
-                Image(category.foodIconAssetName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 40, height: 40)
-                    .grayscale(item.isCompleted ? 1 : 0)
+                    Image(category.foodIconAssetName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: isSelected ? 50 : 38, height: isSelected ? 50 : 38)
+                        .grayscale(item.isCompleted ? 1 : 0)
+                }
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isSelected ? "Change food type" : "\(category.displayTitle) food type")
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(item.ingredientName)
                     .font(.headline)
                     .fontWeight(.black)
                     .foregroundColor(item.isCompleted ? .gray : .black)
-                    .lineLimit(1)
+                    .lineLimit(isSelected ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: isSelected)
                     .strikethrough(item.isCompleted, color: .gray)
 
                 Text(item.recipeName)
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(.gray)
-                    .lineLimit(2)
+                    .lineLimit(isSelected ? nil : 1)
+
+                if isSelected {
+                    Text(category.displayTitle)
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(categoryTint(for: category))
+                }
             }
+            .layoutPriority(1)
 
             Spacer(minLength: 8)
 
-            HStack(spacing: 6) {
+            HStack(spacing: isSelected ? 6 : 0) {
                 quantityAdjustmentButton(systemName: "minus") {
                     storageVM.adjustShoppingListItemAmount(item, direction: -1)
                 }
@@ -274,7 +323,7 @@ struct OnlineShoppingView: View {
                     )
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
-                    .frame(width: 78, height: 38)
+                    .frame(width: isSelected ? 82 : 68, height: 38)
                     .background(
                         item.isCompleted
                         ? Color(.systemGray5)
@@ -289,19 +338,31 @@ struct OnlineShoppingView: View {
                 .allowsHitTesting(isSelected && !item.isCompleted)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 16)
-        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+        .padding(.horizontal, isSelected ? 16 : 12)
+        .padding(.vertical, isSelected ? 20 : 14)
+        .frame(maxWidth: .infinity, minHeight: isSelected ? 132 : 96, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14)
                 .fill(item.isCompleted ? Color(.systemGray5).opacity(0.85) : Color.white)
         )
+        .background {
+            if isSelected {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: SelectedShoppingCardFrameKey.self,
+                        value: proxy.frame(in: .named("shoppingListSpace"))
+                    )
+                }
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .inset(by: isSelected ? 1.5 : 0.5)
                 .stroke(
-                    isSelected ? Color.yellow : Color.black.opacity(item.isCompleted ? 0.03 : 0.06),
+                    isSelected
+                        ? Color(red: 0.78, green: 0.52, blue: 0.02)
+                        : Color.black.opacity(item.isCompleted ? 0.03 : 0.06),
                     style: StrokeStyle(
                         lineWidth: isSelected ? 3 : 1,
                         lineCap: .round,
@@ -315,10 +376,16 @@ struct OnlineShoppingView: View {
         .onTapGesture {
             guard !item.isCompleted else { return }
             withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-                selectedShoppingItemID = isSelected ? nil : item.id
+                selectedShoppingItemID = item.id
             }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.84), value: isSelected)
+    }
+
+    private func clearSelection() {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            selectedShoppingItemID = nil
+        }
     }
 
     private func quantityAdjustmentButton(
@@ -357,6 +424,26 @@ private struct OnlineShop: Identifiable {
     let url: URL
 
     var id: String { name }
+}
+
+private struct SelectedShoppingCardFrameKey: PreferenceKey {
+    static var defaultValue: CGRect?
+
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        value = nextValue() ?? value
+    }
+}
+
+private extension IngredientCategory {
+    var displayTitle: String {
+        switch self {
+        case .meat: "Meat"
+        case .veg: "Veg"
+        case .seafood: "Seafood"
+        case .drink: "Drink"
+        case .condiment: "Condiment"
+        }
+    }
 }
 
 #Preview {
