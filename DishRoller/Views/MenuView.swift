@@ -870,19 +870,32 @@ private struct RecipeDetailSplitView: View {
             .gesture(panelGesture)
             .accessibilityLabel(isExpanded ? "Collapse recipe details" : "Expand recipe details")
 
-            ScrollView {
-                RecipeCardView(
-                    recipe: recipe,
-                    menuVM: menuVM,
-                    storageIngredients: storageIngredients,
-                    generationContext: generationContext,
-                    onLeave: onClose
-                )
-                .environmentObject(appVM)
-                .padding(.horizontal, 18)
-                .padding(.bottom, 48)
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    Color.clear
+                        .frame(height: 1)
+                        .id(RecipeDetailScrollAnchor.top)
+
+                    RecipeCardView(
+                        recipe: recipe,
+                        menuVM: menuVM,
+                        storageIngredients: storageIngredients,
+                        generationContext: generationContext,
+                        onLeave: onClose
+                    )
+                    .id(recipe.id)
+                    .environmentObject(appVM)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 48)
+                }
+                .scrollIndicators(.hidden)
+                .onChange(of: recipe.id) {
+                    Task { @MainActor in
+                        await Task.yield()
+                        scrollProxy.scrollTo(RecipeDetailScrollAnchor.top, anchor: .top)
+                    }
+                }
             }
-            .scrollIndicators(.hidden)
         }
         .background(
             isExpanded
@@ -915,6 +928,10 @@ private struct RecipeDetailSplitView: View {
                 }
             }
     }
+}
+
+private enum RecipeDetailScrollAnchor {
+    case top
 }
 
 private struct RecipeHistoryView: View {
