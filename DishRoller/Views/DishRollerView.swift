@@ -793,6 +793,7 @@ struct DishRollerView: View {
                 ) {
                     appVM.openMenu(with: recipe, context: context)
                     resetRound()
+                    restoreExpiryNotificationForNextVisit()
                 }
             }
         } label: {
@@ -1587,9 +1588,7 @@ struct DishRollerView: View {
                 }
             }
 
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-                activeControlPanel = .results
-            }
+            showSpinResults()
         } else if remainingSpins > 0 {
             if selectedMode == .dishes {
                 let nextWheelRecipes = appVM.savedRecipesVM.savedRecipes
@@ -1629,6 +1628,22 @@ struct DishRollerView: View {
         wheelRecipeSnapshot = []
         wheelExpiryModeSnapshot = nil
         selectedDishRecipe = nil
+    }
+
+    private func showSpinResults() {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+            activeControlPanel = .results
+            if !nearExpiryIngredients.isEmpty {
+                controlPanelPage = 1
+            }
+        }
+    }
+
+    private func restoreExpiryNotificationForNextVisit() {
+        activeControlPanel = .selection
+        if !nearExpiryIngredients.isEmpty {
+            controlPanelPage = 0
+        }
     }
 
     private func switchMode(to mode: Mode) {
