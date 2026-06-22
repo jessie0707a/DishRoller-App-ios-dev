@@ -6,6 +6,59 @@
 //
 
 import SwiftUI
+import ImageIO
+
+private final class IngredientCardImageCache {
+    static let shared = IngredientCardImageCache()
+
+    private let cache = NSCache<NSString, UIImage>()
+
+    private init() {
+        cache.countLimit = 80
+        cache.totalCostLimit = 32 * 1024 * 1024
+    }
+
+    func image(for ingredientID: UUID, data: Data) -> UIImage? {
+        let key = cacheKey(for: ingredientID, data: data)
+        if let cachedImage = cache.object(forKey: key) {
+            return cachedImage
+        }
+
+        guard let image = downsampledImage(from: data) else { return nil }
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? data.count
+        cache.setObject(image, forKey: key, cost: cost)
+        return image
+    }
+
+    private func cacheKey(for ingredientID: UUID, data: Data) -> NSString {
+        let leadingBytes = data.prefix(16).base64EncodedString()
+        let trailingBytes = data.suffix(16).base64EncodedString()
+        return "\(ingredientID.uuidString)-\(data.count)-\(leadingBytes)-\(trailingBytes)" as NSString
+    }
+
+    private func downsampledImage(from data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            return UIImage(data: data)
+        }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 270,
+            kCGImageSourceShouldCacheImmediately: true
+        ]
+
+        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            options as CFDictionary
+        ) else {
+            return UIImage(data: data)
+        }
+
+        return UIImage(cgImage: thumbnail)
+    }
+}
 
 struct IngredientCardView: View {
     let ingredient: Ingredient
@@ -117,7 +170,10 @@ struct IngredientCardView: View {
                 .frame(width: 90, height: 90)
 
             if let imageData = ingredient.imageData,
-               let image = UIImage(data: imageData) {
+               let image = IngredientCardImageCache.shared.image(
+                for: ingredient.id,
+                data: imageData
+               ) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -195,6 +251,8 @@ struct IngredientCardView: View {
             Color(red: 0.46, green: 0.36, blue: 0.88)
         case .condiment:
             Color(red: 0.86, green: 0.55, blue: 0.04)
+        case .other:
+            Color(red: 0.68, green: 0.68, blue: 0.7)
         }
     }
 }

@@ -172,7 +172,7 @@ struct MenuView: View {
 
         return VStack(alignment: .leading, spacing: 12) {
             GeometryReader { headerProxy in
-                let favouriteButtonWidth: CGFloat = 32
+                let favouriteButtonWidth: CGFloat = 38
                 let titleToButtonGap: CGFloat = 18
                 let titleAreaWidth = max(
                     0,
@@ -185,7 +185,7 @@ struct MenuView: View {
                             text: recipe.title,
                             isEnabled: enablesMarquee
                         )
-                            .frame(width: titleAreaWidth, height: 26, alignment: .leading)
+                            .frame(width: titleAreaWidth, height: 30, alignment: .leading)
                             .clipped()
 
                     }
@@ -197,7 +197,7 @@ struct MenuView: View {
                         }
                     } label: {
                         Image(systemName: isFavourite ? "star.fill" : "star")
-                            .font(.caption.weight(.black))
+                            .font(.system(size: 15, weight: .black))
                             .foregroundColor(isFavourite ? .yellow : .black)
                             .frame(width: favouriteButtonWidth, height: favouriteButtonWidth)
                             .background(isFavourite ? Color.black : Color.white.opacity(0.72))
@@ -206,8 +206,10 @@ struct MenuView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(isFavourite ? "Remove from favourites" : "Add to favourites")
                 }
+                .padding(.top, 5)
+                .offset(y: 6)
             }
-            .frame(height: 36)
+            .frame(height: 45)
 
             HStack(spacing: 8) {
                 Label(recipe.estimatedTime, systemImage: "clock")
@@ -232,6 +234,7 @@ struct MenuView: View {
                         .clipShape(Capsule())
                 }
             }
+            .padding(.top, 5)
 
             Spacer(minLength: 8)
 
@@ -254,6 +257,8 @@ struct MenuView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open \(recipe.title)")
+                .padding(.trailing, 4)
+                .offset(y: -8)
             }
         }
         .padding(16)
@@ -262,12 +267,14 @@ struct MenuView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [
-                            Color.yellow,
-                            Color(red: 1, green: 0.88, blue: 0.32)
+                        stops: [
+                            .init(color: Color(red: 1, green: 0.76, blue: 0.0), location: 0),
+                            .init(color: Color.yellow, location: 0.28),
+                            .init(color: Color(red: 1, green: 0.87, blue: 0.25), location: 0.62),
+                            .init(color: Color(red: 1, green: 0.96, blue: 0.68), location: 1)
                         ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                        startPoint: UnitPoint(x: -0.08, y: -0.12),
+                        endPoint: UnitPoint(x: 1.12, y: 1.18)
                     )
                 )
         )
@@ -340,7 +347,7 @@ private struct MarqueeRecipeTitle: View {
 
     private var titleText: some View {
         Text(text)
-            .font(.system(size: 20, weight: .black))
+            .font(.system(size: 22, weight: .black))
             .foregroundColor(.black)
             .lineLimit(1)
     }
@@ -476,7 +483,7 @@ private struct MarqueeRecipeTitle: View {
                             .lineLimit(1)
                             .padding(.horizontal, 9)
                             .frame(height: 26)
-                            .background(Color.yellow.opacity(0.52))
+                            .background(Color.yellow)
                             .clipShape(Capsule())
                     }
                 }
@@ -494,7 +501,7 @@ private struct MarqueeRecipeTitle: View {
                                 .lineLimit(1)
                                 .padding(.horizontal, 9)
                                 .padding(.vertical, 4)
-                                .background(Color.yellow.opacity(0.42))
+                                .background(Color(red: 1, green: 0.94, blue: 0.65))
                                 .clipShape(Capsule())
                         }
                     }
@@ -1208,7 +1215,7 @@ private struct FavouriteRecipesView: View {
                         .lineLimit(1)
                         .padding(.horizontal, 9)
                         .frame(height: 26)
-                        .background(Color.yellow.opacity(0.52))
+                        .background(Color.yellow)
                         .clipShape(Capsule())
                 }
 
@@ -1225,7 +1232,7 @@ private struct FavouriteRecipesView: View {
                                 .lineLimit(1)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.yellow.opacity(0.42))
+                                .background(Color(red: 1, green: 0.94, blue: 0.65))
                                 .clipShape(Capsule())
                         }
                     }
@@ -1287,39 +1294,46 @@ private struct FavouriteCardArtwork: View {
     let recipe: Recipe
 
     var body: some View {
-        HStack(spacing: 0) {
-            Group {
-                if let data = RecipeImageStore.shared.data(for: recipe.imageFileName),
-                   let image = UIImage(data: data) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    ZStack {
-                        Color.yellow.opacity(0.72)
+        GeometryReader { proxy in
+            let artworkWidth = proxy.size.width * 0.58
 
-                        Image(systemName: "fork.knife.circle.fill")
-                            .font(.system(size: 64, weight: .black))
-                            .foregroundStyle(.yellow, .black)
+            HStack(spacing: 0) {
+                Group {
+                    if let data = RecipeImageStore.shared.data(for: recipe.imageFileName),
+                       let image = UIImage(data: data) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .opacity(0.42)
+                    } else {
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color(red: 1, green: 0.82, blue: 0.05), location: 0),
+                                .init(color: Color(red: 1, green: 0.9, blue: 0.38), location: 0.58),
+                                .init(color: Color(red: 1, green: 0.97, blue: 0.76), location: 1)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     }
                 }
-            }
-            .frame(width: 190, height: 138)
-            .clipped()
-            .opacity(0.42)
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black.opacity(0.88), location: 0.52),
-                        .init(color: .clear, location: 1)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+                .frame(width: artworkWidth, height: proxy.size.height)
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.48),
+                            .init(color: .black.opacity(0.72), location: 0.68),
+                            .init(color: .clear, location: 1)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
-            )
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .accessibilityHidden(true)
     }

@@ -192,6 +192,7 @@ final class StorageViewModel: ObservableObject {
     func updateIngredientRecord(
         id: UUID,
         name: String,
+        category: IngredientCategory,
         amount: Double,
         unit: UnitType,
         expiryDate: Date?,
@@ -208,12 +209,16 @@ final class StorageViewModel: ObservableObject {
         }
 
         ingredients[index].name = cleanName
+        ingredients[index].category = category
         ingredients[index].amount = amount
         ingredients[index].unit = unit
         ingredients[index].expiryDate = expiryDate
         ingredients[index].imageData = imageData
         if imageData != nil {
             ingredients[index].iconName = nil
+        } else if ingredients[index].iconName == nil ||
+                    ingredients[index].iconName?.hasPrefix("food-category-") == true {
+            ingredients[index].iconName = category.foodIconAssetName
         }
         save()
     }
@@ -605,7 +610,7 @@ final class StorageViewModel: ObservableObject {
                 return category
             }
         }
-        return .veg
+        return .other
     }
 
     private func loadSampleData() {

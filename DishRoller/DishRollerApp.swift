@@ -15,6 +15,7 @@ struct DishRollerApp: App {
         WindowGroup {
             RootTabView()
                 .environmentObject(appVM)
+                .preferredColorScheme(.light)
         }
     }
 }

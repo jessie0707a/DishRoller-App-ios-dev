@@ -243,7 +243,7 @@ struct StorageView: View {
     }
 
     private var shoppingCartItemCount: Int {
-        appVM.storageVM.shoppingListItems.count
+        appVM.storageVM.shoppingListItems.count { !$0.isCompleted }
     }
 
     private var shoppingCartCountText: String {
@@ -620,6 +620,7 @@ private struct PurchaseRecordEditorPage: View {
 
     @State private var amountText: String
     @State private var itemNameText: String
+    @State private var selectedCategory: IngredientCategory
     @State private var selectedUnit: UnitType
     @State private var expiryDate: Date?
     @State private var quantityEditMode: QuantityEditMode?
@@ -649,6 +650,7 @@ private struct PurchaseRecordEditorPage: View {
         self.onFinished = onFinished
         _amountText = State(initialValue: Self.formattedAmount(ingredient.amount))
         _itemNameText = State(initialValue: ingredient.name)
+        _selectedCategory = State(initialValue: ingredient.category)
         _selectedUnit = State(initialValue: ingredient.unit)
         _expiryDate = State(initialValue: ingredient.expiryDate)
         _originalAmountBeforeQuantityEdit = State(initialValue: ingredient.amount)
@@ -659,15 +661,23 @@ private struct PurchaseRecordEditorPage: View {
         PurchaseEditorCard(onBackgroundTap: onCancel) {
             VStack(spacing: 10) {
                 editorHeader(
-                    category: ingredient.category,
+                    category: selectedCategory,
                     expiryDate: expiryDate,
+                    onCategoryChange: { category in
+                        selectedCategory = category
+                        focusedControl = nil
+                    },
                     onDelete: { showDeleteConfirmation = true }
                 )
                 Button {
                     focusedControl = nil
                     showPhotoSourceOptions = true
                 } label: {
-                    editorImage(for: ingredient, imageData: editedImageData)
+                    editorImage(
+                        for: ingredient,
+                        category: selectedCategory,
+                        imageData: editedImageData
+                    )
                         .overlay {
                             Circle()
                                 .stroke(Color.yellow, style: StrokeStyle(lineWidth: 3, dash: [7, 5]))
@@ -987,6 +997,7 @@ private struct PurchaseRecordEditorPage: View {
         storageVM.updateIngredientRecord(
             id: ingredient.id,
             name: cleanName,
+            category: selectedCategory,
             amount: amount,
             unit: selectedUnit,
             expiryDate: expiryDate,
@@ -1289,23 +1300,32 @@ private struct PurchaseEditorCard<Content: View>: View {
 private func editorHeader(
     category: IngredientCategory,
     expiryDate: Date?,
+    onCategoryChange: ((IngredientCategory) -> Void)? = nil,
     onDelete: (() -> Void)? = nil
 ) -> some View {
     HStack(alignment: .center) {
-        Text(category.rawValue)
-            .font(.system(size: 19, weight: .black))
-            .foregroundColor(.black)
-            .lineLimit(1)
-            .minimumScaleFactor(0.55)
-            .padding(.horizontal, 14)
-            .frame(minWidth: 104)
-            .frame(height: 40)
-            .background(
-                expiryDate.map { daysUntilExpiry(for: $0) < 0 } == true
-                    ? Color(.systemGray4)
-                    : Color.yellow
-            )
-            .clipShape(Capsule())
+        if let onCategoryChange {
+            Menu {
+                ForEach(IngredientCategory.allCases) { option in
+                    Button {
+                        onCategoryChange(option)
+                    } label: {
+                        if option == category {
+                            Label(option.rawValue, systemImage: "checkmark")
+                        } else {
+                            Text(option.rawValue)
+                        }
+                    }
+                }
+            } label: {
+                editorCategoryTag(category: category, expiryDate: expiryDate, isEditable: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Change item type")
+            .accessibilityValue(category.rawValue)
+        } else {
+            editorCategoryTag(category: category, expiryDate: expiryDate)
+        }
 
         Spacer()
 
@@ -1334,10 +1354,46 @@ private func editorHeader(
     }
 }
 
-private func editorImage(for ingredient: Ingredient, imageData: Data? = nil) -> some View {
-    ZStack {
+private func editorCategoryTag(
+    category: IngredientCategory,
+    expiryDate: Date?,
+    isEditable: Bool = false
+) -> some View {
+    HStack(spacing: 7) {
+        Text(category.rawValue)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .allowsTightening(true)
+            .frame(maxWidth: .infinity)
+
+        if isEditable {
+            Image(systemName: "chevron.down")
+                .font(.system(size: 10, weight: .black))
+                .fixedSize()
+        }
+    }
+    .font(.system(size: 19, weight: .black))
+    .foregroundColor(.black)
+    .padding(.horizontal, 14)
+    .frame(width: 150, height: 40)
+    .background(
+        expiryDate.map { daysUntilExpiry(for: $0) < 0 } == true
+            ? Color(.systemGray4)
+            : Color.yellow
+    )
+    .clipShape(Capsule())
+}
+
+private func editorImage(
+    for ingredient: Ingredient,
+    category: IngredientCategory? = nil,
+    imageData: Data? = nil
+) -> some View {
+    let displayedCategory = category ?? ingredient.category
+
+    return ZStack {
         Circle()
-            .fill(editorCategoryTint(for: ingredient.category).opacity(0.18))
+            .fill(editorCategoryTint(for: displayedCategory).opacity(0.18))
             .frame(width: 152, height: 152)
 
         if let imageData = imageData ?? ingredient.imageData,
@@ -1348,7 +1404,11 @@ private func editorImage(for ingredient: Ingredient, imageData: Data? = nil) -> 
                 .frame(width: 132, height: 132)
                 .clipShape(Circle())
         } else {
-            Image(ingredient.iconName ?? ingredient.category.foodIconAssetName)
+            Image(
+                category == nil
+                    ? ingredient.iconName ?? displayedCategory.foodIconAssetName
+                    : displayedCategory.foodIconAssetName
+            )
                 .resizable()
                 .scaledToFit()
                 .frame(width: 126, height: 126)
@@ -1369,6 +1429,8 @@ private func editorCategoryTint(for category: IngredientCategory) -> Color {
         Color(red: 0.46, green: 0.36, blue: 0.88)
     case .condiment:
         Color(red: 0.86, green: 0.55, blue: 0.04)
+    case .other:
+        Color(red: 0.68, green: 0.68, blue: 0.7)
     }
 }
 
@@ -1568,6 +1630,8 @@ private extension IngredientCategory {
             "Drink"
         case .condiment:
             "Condiment"
+        case .other:
+            "Other"
         }
     }
 }
@@ -1601,7 +1665,8 @@ private struct AddFoodItemSheet: View {
         IngredientCategory.meat.foodIconAssetName,
         IngredientCategory.seafood.foodIconAssetName,
         IngredientCategory.condiment.foodIconAssetName,
-        IngredientCategory.drink.foodIconAssetName
+        IngredientCategory.drink.foodIconAssetName,
+        IngredientCategory.other.foodIconAssetName
     ]
 
     init(storageVM: StorageViewModel, initialFoodName: String = "") {

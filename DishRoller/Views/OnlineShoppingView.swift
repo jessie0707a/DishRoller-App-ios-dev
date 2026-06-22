@@ -415,6 +415,8 @@ struct OnlineShoppingView: View {
             Color(red: 0.46, green: 0.36, blue: 0.88)
         case .condiment:
             Color(red: 0.86, green: 0.55, blue: 0.04)
+        case .other:
+            Color(red: 0.68, green: 0.68, blue: 0.7)
         }
     }
 }
@@ -442,6 +444,7 @@ private extension IngredientCategory {
         case .seafood: "Seafood"
         case .drink: "Drink"
         case .condiment: "Condiment"
+        case .other: "Other"
         }
     }
 }

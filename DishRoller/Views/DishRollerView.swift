@@ -1261,6 +1261,17 @@ struct DishRollerView: View {
                 Circle().stroke(Color.black, lineWidth: 6).padding(24)
 
                 ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                    let fullLabelScale = wheelLabelScale(
+                        segmentAngle: segment.endAngle - segment.startAngle,
+                        radius: radius,
+                        preferredHeight: 78
+                    )
+                    let tagScale = wheelLabelScale(
+                        segmentAngle: segment.endAngle - segment.startAngle,
+                        radius: radius,
+                        preferredHeight: 30
+                    )
+
                     WheelSegmentShape(
                         startAngle: .degrees(segment.startAngle),
                         endAngle: .degrees(segment.endAngle),
@@ -1276,13 +1287,43 @@ struct DishRollerView: View {
                         .stroke(Color.black, lineWidth: 6)
                     )
 
-                    RecipeWheelSegmentLabel(recipe: segment.recipe)
-                        .frame(width: 105)
-                        .rotationEffect(.degrees(labelRotation(for: segment.midAngle)))
-                        .offset(
-                            x: cos(segment.midAngle * .pi / 180) * radius,
-                            y: sin(segment.midAngle * .pi / 180) * radius
-                        )
+                    if fullLabelScale >= minimumReadableWheelLabelScale {
+                        RecipeWheelSegmentLabel(recipe: segment.recipe, showsTitle: true)
+                            .frame(width: min(105, size * 0.2))
+                            .scaleEffect(fullLabelScale)
+                            .rotationEffect(.degrees(labelRotation(for: segment.midAngle)))
+                            .offset(
+                                x: cos(segment.midAngle * .pi / 180) * radius,
+                                y: sin(segment.midAngle * .pi / 180) * radius
+                            )
+                            .frame(width: size, height: size)
+                            .clipShape(
+                                WheelSegmentShape(
+                                    startAngle: .degrees(segment.startAngle),
+                                    endAngle: .degrees(segment.endAngle),
+                                    innerRadiusRatio: 0.55
+                                )
+                            )
+                            .allowsHitTesting(false)
+                    } else if tagScale >= minimumReadableWheelLabelScale {
+                        RecipeWheelSegmentLabel(recipe: segment.recipe, showsTitle: false)
+                            .frame(width: min(82, size * 0.16))
+                            .scaleEffect(tagScale)
+                            .rotationEffect(.degrees(labelRotation(for: segment.midAngle)))
+                            .offset(
+                                x: cos(segment.midAngle * .pi / 180) * radius,
+                                y: sin(segment.midAngle * .pi / 180) * radius
+                            )
+                            .frame(width: size, height: size)
+                            .clipShape(
+                                WheelSegmentShape(
+                                    startAngle: .degrees(segment.startAngle),
+                                    endAngle: .degrees(segment.endAngle),
+                                    innerRadiusRatio: 0.55
+                                )
+                            )
+                            .allowsHitTesting(false)
+                    }
                 }
 
                 Circle()
@@ -1342,6 +1383,17 @@ struct DishRollerView: View {
                     .padding(24)
 
                 ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                    let fullLabelScale = wheelLabelScale(
+                        segmentAngle: segment.endAngle - segment.startAngle,
+                        radius: radius,
+                        preferredHeight: 78
+                    )
+                    let tagScale = wheelLabelScale(
+                        segmentAngle: segment.endAngle - segment.startAngle,
+                        radius: radius,
+                        preferredHeight: 30
+                    )
+
                     WheelSegmentShape(
                         startAngle: .degrees(segment.startAngle),
                         endAngle: .degrees(segment.endAngle),
@@ -1366,13 +1418,43 @@ struct DishRollerView: View {
                         .padding(5)
                     )
 
-                    WheelSegmentLabel(ingredient: segment.ingredient)
-                        .frame(width: 92)
-                        .rotationEffect(.degrees(labelRotation(for: segment.midAngle)))
-                        .offset(
-                            x: cos(segment.midAngle * .pi / 180) * radius,
-                            y: sin(segment.midAngle * .pi / 180) * radius
-                        )
+                    if fullLabelScale >= minimumReadableWheelLabelScale {
+                        WheelSegmentLabel(ingredient: segment.ingredient, showsName: true)
+                            .frame(width: min(92, size * 0.18))
+                            .scaleEffect(fullLabelScale)
+                            .rotationEffect(.degrees(labelRotation(for: segment.midAngle)))
+                            .offset(
+                                x: cos(segment.midAngle * .pi / 180) * radius,
+                                y: sin(segment.midAngle * .pi / 180) * radius
+                            )
+                            .frame(width: size, height: size)
+                            .clipShape(
+                                WheelSegmentShape(
+                                    startAngle: .degrees(segment.startAngle),
+                                    endAngle: .degrees(segment.endAngle),
+                                    innerRadiusRatio: 0.55
+                                )
+                            )
+                            .allowsHitTesting(false)
+                    } else if tagScale >= minimumReadableWheelLabelScale {
+                        WheelSegmentLabel(ingredient: segment.ingredient, showsName: false)
+                            .frame(width: min(72, size * 0.14))
+                            .scaleEffect(tagScale)
+                            .rotationEffect(.degrees(labelRotation(for: segment.midAngle)))
+                            .offset(
+                                x: cos(segment.midAngle * .pi / 180) * radius,
+                                y: sin(segment.midAngle * .pi / 180) * radius
+                            )
+                            .frame(width: size, height: size)
+                            .clipShape(
+                                WheelSegmentShape(
+                                    startAngle: .degrees(segment.startAngle),
+                                    endAngle: .degrees(segment.endAngle),
+                                    innerRadiusRatio: 0.55
+                                )
+                            )
+                            .allowsHitTesting(false)
+                    }
                 }
 
                 Circle()
@@ -1601,6 +1683,20 @@ struct DishRollerView: View {
     private func normalizedDegrees(_ degrees: Double) -> Double {
         let remainder = degrees.truncatingRemainder(dividingBy: 360)
         return remainder >= 0 ? remainder : remainder + 360
+    }
+
+    private var minimumReadableWheelLabelScale: CGFloat {
+        0.72
+    }
+
+    private func wheelLabelScale(
+        segmentAngle: Double,
+        radius: CGFloat,
+        preferredHeight: CGFloat
+    ) -> CGFloat {
+        let arcLength = radius * CGFloat(segmentAngle * .pi / 180)
+        let availableTangentialSpace = max(arcLength - 12, 0)
+        return min(availableTangentialSpace / preferredHeight, 1)
     }
 
     private func labelRotation(for angle: Double) -> Double {
@@ -1970,6 +2066,7 @@ struct WheelSegmentShape: Shape {
 
 struct WheelSegmentLabel: View {
     let ingredient: Ingredient
+    let showsName: Bool
 
     var body: some View {
         VStack(spacing: 7) {
@@ -1995,22 +2092,26 @@ struct WheelSegmentLabel: View {
                 )
                 .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
 
-            Text(ingredient.name)
-                .font(.headline)
-                .fontWeight(.black)
-                .foregroundColor(.black)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.white.opacity(0.58))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            if showsName {
+                Text(ingredient.name)
+                    .font(.headline)
+                    .fontWeight(.black)
+                    .foregroundColor(.black)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.72)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.58))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
         }
     }
 }
 
 private struct RecipeWheelSegmentLabel: View {
     let recipe: Recipe
+    let showsTitle: Bool
 
     var body: some View {
         VStack(spacing: 7) {
@@ -2035,17 +2136,19 @@ private struct RecipeWheelSegmentLabel: View {
                         .stroke(Color.black, lineWidth: 1.4)
                 )
 
-            Text(recipe.title)
-                .font(.subheadline)
-                .fontWeight(.black)
-                .foregroundColor(.black)
-                .lineLimit(2)
-                .minimumScaleFactor(0.65)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 4)
-                .background(Color.white.opacity(0.72))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            if showsTitle {
+                Text(recipe.title)
+                    .font(.subheadline)
+                    .fontWeight(.black)
+                    .foregroundColor(.black)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.72)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.72))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
         }
     }
 }
@@ -2074,6 +2177,8 @@ private extension IngredientCategory {
             "Drink"
         case .condiment:
             "Condiment"
+        case .other:
+            "Other"
         }
     }
 }

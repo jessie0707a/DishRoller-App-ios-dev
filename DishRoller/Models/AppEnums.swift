@@ -13,6 +13,7 @@ enum IngredientCategory: String, CaseIterable, Codable, Identifiable {
     case seafood = "SEAFOOD"
     case drink = "DRINK"
     case condiment = "CONDIMENT"
+    case other = "OTHER"
 
     var id: String { rawValue }
 
@@ -23,6 +24,7 @@ enum IngredientCategory: String, CaseIterable, Codable, Identifiable {
         case .seafood:   "fish"
         case .drink:     "cup.and.saucer"
         case .condiment: "flame"
+        case .other:     "shippingbox"
         }
     }
 
@@ -38,6 +40,8 @@ enum IngredientCategory: String, CaseIterable, Codable, Identifiable {
             "food-category-drink"
         case .condiment:
             "food-category-condiment"
+        case .other:
+            "food-category-other"
         }
     }
 }

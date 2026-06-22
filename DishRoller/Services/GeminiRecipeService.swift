@@ -675,6 +675,8 @@ private enum DemoRecipeFactory {
             return "liquid"
         case .condiment:
             return "paste"
+        case .other:
+            return "prepared"
         }
     }
 }
