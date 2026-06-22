@@ -1279,6 +1279,7 @@ private struct FavouriteRecipesView: View {
             )
         }
         .buttonStyle(.plain)
+        .shadow(color: Color.black.opacity(0.28), radius: 14, x: 0, y: 8)
     }
 
     private func cookCountText(for recipe: Recipe) -> String {

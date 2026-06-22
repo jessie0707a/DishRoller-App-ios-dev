@@ -51,9 +51,7 @@ struct StorageView: View {
                                         ingredient: ingredient,
                                         isSelected: selectedIngredientID == ingredient.id,
                                         onEdit: {
-                                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                                                editorContext = IngredientEditorContext(ingredientID: ingredient.id)
-                                            }
+                                            editorContext = IngredientEditorContext(ingredientID: ingredient.id)
                                         }
                                     )
                                     .background {
@@ -134,11 +132,11 @@ struct StorageView: View {
                     initialIngredientID: editorContext.ingredientID,
                     onClose: closeEditor
                 )
-                .transition(.scale(scale: 0.78, anchor: .bottomTrailing).combined(with: .opacity))
+                .transition(.scale(scale: 0.97).combined(with: .opacity))
                 .zIndex(20)
             }
         }
-        .animation(.spring(response: 0.38, dampingFraction: 0.82), value: editorContext?.id)
+        .animation(.easeOut(duration: 0.2), value: editorContext?.id)
         .confirmationDialog(
             "Delete this storage card?",
             isPresented: Binding(
@@ -417,9 +415,7 @@ struct StorageView: View {
     }
 
     private func closeEditor() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-            editorContext = nil
-        }
+        editorContext = nil
     }
 
     private func clearCardSelection() {
@@ -488,8 +484,7 @@ private struct IngredientPurchaseEditorOverlay: View {
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(Color.black.opacity(0.18))
-                .background(.ultraThinMaterial)
+                .fill(Color.black.opacity(0.32))
                 .ignoresSafeArea()
                 .onTapGesture {
                     onClose()
@@ -579,7 +574,6 @@ private struct IngredientPurchaseEditorOverlay: View {
                         }
                     }
                 }
-                .transition(.scale(scale: 0.96).combined(with: .opacity))
             } else {
                 Text("This item is no longer available.")
                     .font(.headline.weight(.black))
@@ -1397,7 +1391,10 @@ private func editorImage(
             .frame(width: 152, height: 152)
 
         if let imageData = imageData ?? ingredient.imageData,
-           let image = UIImage(data: imageData) {
+           let image = IngredientImageCache.shared.image(
+            for: ingredient.id,
+            data: imageData
+           ) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()

@@ -8,8 +8,8 @@
 import SwiftUI
 import ImageIO
 
-private final class IngredientCardImageCache {
-    static let shared = IngredientCardImageCache()
+final class IngredientImageCache {
+    static let shared = IngredientImageCache()
 
     private let cache = NSCache<NSString, UIImage>()
 
@@ -44,7 +44,7 @@ private final class IngredientCardImageCache {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: 270,
+            kCGImageSourceThumbnailMaxPixelSize: 420,
             kCGImageSourceShouldCacheImmediately: true
         ]
 
@@ -170,7 +170,7 @@ struct IngredientCardView: View {
                 .frame(width: 90, height: 90)
 
             if let imageData = ingredient.imageData,
-               let image = IngredientCardImageCache.shared.image(
+               let image = IngredientImageCache.shared.image(
                 for: ingredient.id,
                 data: imageData
                ) {
